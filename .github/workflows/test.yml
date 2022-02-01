@@ -65,17 +65,22 @@ jobs:
     - name: Conda info
       run: conda info --all
 
-    - name: Install build requirements
-      run: mamba install --quiet --yes --name test build
+    - name: Install build/test requirements
+      run: |
+          mamba install --quiet --yes --name test \
+              build \
+              coverage \
+              pytest \
+              pytest-cov \
+          ;
 
     - name: Create distributions
       run: python -m build . --sdist --wheel --outdir .
 
-    - name: Install this project
-      run: python -m pip install *.tar.*
-
-    - name: Install test requirements
-      run: mamba install --quiet --yes --name test pytest pytest-cov
+    - name: Install this project with test extras
+      run: |
+        TARBALL=$(ls pip2conda-*.tar.*)
+        python -m pip install ${TARBALL}[test]
 
     - name: Package list
       run: python -m pip list installed
