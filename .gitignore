@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Distribution / packaging
+build/
+.coverage*
+dist/
+*.egg-info/
+*.egg
+.eggs/
+eggs/
+MANIFEST
+pip2conda/_version.py
+
+# Sphinx documentation
+/docs/_build
+
+# OS/editor files
+*.swp
+.DS_Store
+.idea
+
+# Patches
+*.patch
+
+# py.test cache dir
+.cache/
+.pytest_cache/
