@@ -10,7 +10,6 @@ import logging
 import os
 import re
 import subprocess
-import sys
 import tempfile
 from configparser import ConfigParser
 from pathlib import Path
@@ -203,16 +202,16 @@ def parse_build_requires(project_dir):
         return ppt["build-system"]["requires"]
 
 
-def parse_all_requirements(python, project_dir, extras):
+def parse_all_requirements(project_dir, python_version=None, extras=[]):
     """Parse all requirements for a project
 
     Parameters
     ----------
-    python : `str`
-        the ``'X.Y'`` python version to use
-
     project_dir : `pathlib.Path`
         the base path of the project
+
+    python_version : `str`, optional
+        the ``'X.Y'`` python version to use
 
     extras : `list` of `str` or ``'ALL'``
         the list of extras to parse from the ``'options.extras_require'``
@@ -227,8 +226,9 @@ def parse_all_requirements(python, project_dir, extras):
     conda_forge_map = load_conda_forge_name_map()
 
     # add python first
-    LOGGER.info(f"Using Python {python}")
-    yield f"python={python}.*"
+    if python_version:
+        LOGGER.info(f"Using Python {python_version}")
+        yield f"python={python_version}.*"
 
     # then build requirements
     LOGGER.info("Processing build-requires")
@@ -385,8 +385,8 @@ def create_parser():
     parser.add_argument(
         "-p",
         "--python-version",
-        default="{0.major}.{0.minor}".format(sys.version_info),
-        help="python version to use",
+        default=None,
+        help="python X.Y version to use",
     )
     parser.add_argument(
         "-o",
@@ -412,16 +412,16 @@ def create_parser():
 
 
 def pip2conda(
-        python_version,
         project_dir,
+        python_version=None,
         extras=[],
         skip_conda_forge_check=False,
 ):
     # parse requirements
     requirements = parse_all_requirements(
-        python_version,
         project_dir,
-        extras,
+        python_version=python_version,
+        extras=extras,
     )
 
     if skip_conda_forge_check:
@@ -447,8 +447,8 @@ def main(args=None):
 
     # run the thing
     requirements = pip2conda(
-        args.python_version,
         args.project_dir,
+        python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
         skip_conda_forge_check=args.skip_conda_forge_check,
     )
