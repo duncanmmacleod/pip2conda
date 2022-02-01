@@ -458,6 +458,6 @@ def main(args=None):
     # print output to file or stdout
     out = "\n".join(sorted(requirements))
     if args.output:
-        args.output.write_text(out)
+        args.output.write_text(out + "\n")
     else:
         print(out)
