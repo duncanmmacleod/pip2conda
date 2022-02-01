@@ -18,7 +18,7 @@ from shutil import which
 
 import requests
 
-import toml
+import tomli
 
 import pkg_resources
 
@@ -192,7 +192,8 @@ def parse_build_requires(project_dir):
     project_dir = Path(project_dir)
     pyproject_toml = project_dir / "pyproject.toml"
     try:
-        ppt = toml.load(pyproject_toml)
+        with open(pyproject_toml, "rb") as file:
+            ppt = tomli.load(file)
     except FileNotFoundError:
         LOGGER.debug("  failed to read pyproject.toml, reading setup.cfg")
         setup_cfg = project_dir / "setup.cfg"
