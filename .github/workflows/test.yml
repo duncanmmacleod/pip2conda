@@ -89,7 +89,9 @@ jobs:
       run: python -m pytest --cov pip2conda --junitxml=pytest.xml --pyargs pip2conda.tests -ra -v
 
     - name: Run over this project
-      run: python -m coverage run --append --module pip2conda --all
+      run: |
+        python -m coverage run --append --module pip2conda --all --output test.yml
+        cat test.yml
 
     - name: Coverage report
       run: python -m coverage report --show-missing

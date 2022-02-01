@@ -351,6 +351,18 @@ def filter_requirements(requirements):
     return requirements
 
 
+def write_yaml(path, packages):
+    """Write the given ``packages`` as a conda environment YAML file
+    """
+    import yaml
+    env = {
+        "channels": ["conda-forge"],
+        "dependencies": packages,
+    }
+    with open(path, "w") as file:
+        yaml.dump(env, file)
+
+
 def create_parser():
     """Create a command-line `ArgumentParser` for this tool
     """
@@ -393,7 +405,12 @@ def create_parser():
         "-o",
         "--output",
         type=Path,
-        help="path of output file, defaults to stdout",
+        help=(
+            "path of output file, defaults to stdout; if the --output "
+            "argument ends with .yml or .yaml, output will be written in "
+            "as a conda environment YAML file, otherwise a simple "
+            "requirements.txt-style text file will be written"
+        ),
     )
     parser.add_argument(
         "-s",
@@ -447,17 +464,19 @@ def main(args=None):
         LOGGER.debug(f"found mamba in {CONDA_OR_MAMBA}")
 
     # run the thing
-    requirements = pip2conda(
+    requirements = sorted(pip2conda(
         args.project_dir,
         python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
         skip_conda_forge_check=args.skip_conda_forge_check,
-    )
+    ))
     LOGGER.info("Package finding complete")
 
     # print output to file or stdout
-    out = "\n".join(sorted(requirements))
-    if args.output:
+    out = "\n".join(requirements)
+    if args.output and args.output.suffix in {".yml", ".yaml"}:
+        write_yaml(args.output, requirements)
+    elif args.output:
         args.output.write_text(out + "\n")
     else:
         print(out)
