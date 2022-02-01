@@ -46,7 +46,7 @@ requests
 setuptools
 setuptools>=42
 setuptools_scm>=3.4
-toml
+tomli
 tomli>=1.0.0
 wheel
 ```

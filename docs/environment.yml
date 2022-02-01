@@ -11,7 +11,7 @@ dependencies:
   - grayskull
   - requests
   - setuptools
-  - toml
+  - tomli
   # docs
   - myst-parser
   - sphinx
