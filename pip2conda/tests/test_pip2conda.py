@@ -93,7 +93,6 @@ test =
     out = tmp_path / "out.txt"
     try:
         pip2conda_main(args=[
-            "--python-version", "9.9",
             "--project-dir", str(tmp_path),
             "--output", str(out),
             "--all",

@@ -41,7 +41,6 @@ project repository does this:
 $ pip2conda
 grayskull
 packaging>=20.0
-python=3.9.*
 requests
 setuptools
 setuptools>=42
