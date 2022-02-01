@@ -1,7 +1,12 @@
 # pip2conda
 
-`pip2conda` is a tool to translate `pip`-style requirements into conda
-requirements, mainly for use in seeding test environments (e.g. in CI).
+`pip2conda` is a tool to translate `pip`-style requirements into `conda`
+requirements.
+
+`pip2conda` parses build requirements from ``pyproject.toml`` files, then
+runtime and extra requirements from ``setup.cfg``, including unpackging extras and
+evaluating environment markers, before matching translating each requirement
+into a conda-forge requirement suitable for installation with `conda/mamba`.
 
 [![PyPI version](https://badge.fury.io/py/pip2conda.svg)](http://badge.fury.io/py/pip2conda)
 [![Conda version](https://img.shields.io/conda/vn/conda-forge/pip2conda.svg)](https://anaconda.org/conda-forge/pip2conda/)
