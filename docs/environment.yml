@@ -8,7 +8,7 @@ dependencies:
   - setuptools-scm
   - wheel
   # install
-  - grayskull
+  - grayskull >=1.0.0
   - pyyaml
   - requests
   - setuptools
