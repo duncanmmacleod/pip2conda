@@ -9,6 +9,7 @@ dependencies:
   - wheel
   # install
   - grayskull
+  - pyyaml
   - requests
   - setuptools
   - tomli
