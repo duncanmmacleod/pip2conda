@@ -295,12 +295,21 @@ def find_packages(requirements, use_mamba=True):
         universal_newlines=True,  # rename to 'text' for python >=3.7
     )
 
-    # mamba search failed, but mamba doesn't output JSON on failure
-    # so we have to try again using conda to strip out the failures
-    if pfind.returncode and use_mamba:
-        LOGGER.debug(f"mamba install failed:\n{pfind.stdout}".rstrip())
-        LOGGER.debug("trying again with conda")
-        return(find_packages(requirements, use_mamba=False))
+    if pfind.returncode:
+        # search failed; if we can't use the output to parse missing
+        # packages because we're using mamba, we need to try again
+        # with conda, which definitely outputs json...
+        try:
+            json.loads(pfind.stdout)
+        except json.JSONDecodeError:
+            if not use_mamba:
+                raise
+            LOGGER.debug(
+                "mamba search failed and didn't report JSON:\n"
+                f"{pfind.stdout}".rstrip()
+            )
+            LOGGER.debug("trying again with conda")
+            return(find_packages(requirements, use_mamba=False))
 
     return pfind
 
