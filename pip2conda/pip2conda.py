@@ -292,7 +292,7 @@ def find_packages(requirements, use_mamba=True):
         cmd,
         check=False,
         stdout=subprocess.PIPE,
-        universal_newlines=True,  # rename to 'text' for python >=3.7
+        text=True,
     )
 
     if pfind.returncode:
