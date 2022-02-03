@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) Cardiff University (2022)
-# SPDX-License-Idenfitier: GPL-3.0-or-later
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 """Parse setup.cfg for package requirements and print out a list of
 packages that can be installed using conda from the conda-forge channel.
