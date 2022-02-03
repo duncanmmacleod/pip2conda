@@ -9,7 +9,6 @@ dependencies:
   - wheel
   # install
   - grayskull >=1.0.0
-  - pyyaml
   - requests
   - ruamel.yaml
   - setuptools
