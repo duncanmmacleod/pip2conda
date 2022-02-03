@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# Copyright (C) Cardiff University (2022)
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 """Parse setup.cfg for package requirements and print out a list of
 packages that can be installed using conda from the conda-forge channel.
@@ -286,7 +288,7 @@ def find_packages(requirements, use_mamba=True):
         cmd,
         check=False,
         stdout=subprocess.PIPE,
-        universal_newlines=True,  # rename to 'text' for python >=3.7
+        text=True,
     )
 
     if pfind.returncode:
