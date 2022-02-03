@@ -21,6 +21,11 @@ import tomli
 
 import pkg_resources
 
+from grayskull.strategy.pypi import PYPI_CONFIG
+from ruamel.yaml import YAML
+
+yaml = YAML()
+
 # conda config
 CONDA = (
     which("conda")
@@ -50,22 +55,11 @@ def load_conda_forge_name_map():
 
     See https://github.com/conda-incubator/grayskull/blob/main/grayskull/pypi/config.yaml
     """  # noqa: E501
-    try:
-        from grayskull.strategy.pypi import PYPI_CONFIG
-    except ModuleNotFoundError:
-        LOGGER.warning(
-            "failed to import grayskull, will not be able to translate "
-            "pypi names into conda-forge names",
-        )
-        return {}
-
-    from ruamel.yaml import YAML
-
     # parse the config file and return (pypi_name: conda_forge_name) pairs
     with open(PYPI_CONFIG, "r") as conf:
         return {
             x: y["conda_forge"]
-            for x, y in YAML().load(conf).items()
+            for x, y in yaml.load(conf).items()
         }
 
 
@@ -363,7 +357,6 @@ def filter_requirements(requirements):
 def write_yaml(path, packages):
     """Write the given ``packages`` as a conda environment YAML file
     """
-    import yaml
     env = {
         "channels": ["conda-forge"],
         "dependencies": packages,

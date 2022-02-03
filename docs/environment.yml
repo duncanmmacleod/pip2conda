@@ -8,9 +8,9 @@ dependencies:
   - setuptools-scm
   - wheel
   # install
-  - grayskull
-  - pyyaml
+  - grayskull >=1.0.0
   - requests
+  - ruamel.yaml
   - setuptools
   - tomli
   # docs
