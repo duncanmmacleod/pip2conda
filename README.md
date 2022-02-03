@@ -16,6 +16,7 @@ into a conda-forge requirement suitable for installation with `conda/mamba`.
 [![Build status](https://github.com/duncanmmacleod/pip2conda/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/duncanmmacleod/pip2conda/actions/workflows/test.yml)
 [![Documentation status](https://readthedocs.org/projects/pip2conda/badge/?version=latest)](https://pip2conda.readthedocs.io/en/latest/?badge=latest)
 [![Coverage status](https://codecov.io/gh/duncanmmacleod/pip2conda/branch/main/graph/badge.svg)](https://codecov.io/gh/duncanmmacleod/pip2conda)
+[![Maintainability](https://api.codeclimate.com/v1/badges/767d8f5a2468fabb583b/maintainability)](https://codeclimate.com/github/duncanmmacleod/pip2conda/maintainability)
 
 ## Installation
 
