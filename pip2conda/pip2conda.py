@@ -310,14 +310,14 @@ def find_packages(requirements, use_mamba=True):
     return pfind
 
 
-def filter_requirements(requirements):
+def filter_requirements(requirements, use_mamba=True):
     """Filter requirements by running conda/mamba to see what is missing
     """
     requirements = set(requirements)
 
     # find all packages with conda
     LOGGER.info("Finding packages with conda/mamba")
-    pfind = find_packages(requirements, use_mamba=True)
+    pfind = find_packages(requirements, use_mamba=use_mamba)
 
     if pfind.returncode:  # something went wrong
         # parse the JSON report
@@ -417,6 +417,13 @@ def create_parser():
         ),
     )
     parser.add_argument(
+        "-M",
+        "--disable-mamba",
+        action="store_true",
+        default=False,
+        help="don't use mamba, even if it is available",
+    )
+    parser.add_argument(
         "-s",
         "--skip-conda-forge-check",
         action="store_true",
@@ -438,6 +445,7 @@ def pip2conda(
         python_version=None,
         extras=[],
         skip_conda_forge_check=False,
+        use_mamba=True,
 ):
     # parse requirements
     requirements = parse_all_requirements(
@@ -450,7 +458,10 @@ def pip2conda(
         return requirements
 
     # filter out requirements that aren't available in conda-forge
-    return filter_requirements(requirements)
+    return filter_requirements(
+        requirements,
+        use_mamba=use_mamba,
+    )
 
 
 def main(args=None):
@@ -464,7 +475,7 @@ def main(args=None):
 
     # show what conda/mamba we found
     LOGGER.debug(f"found conda in {CONDA}")
-    if CONDA_OR_MAMBA != CONDA:
+    if CONDA_OR_MAMBA != CONDA and not args.disable_mamba:
         LOGGER.debug(f"found mamba in {CONDA_OR_MAMBA}")
 
     # run the thing
@@ -473,6 +484,7 @@ def main(args=None):
         python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
         skip_conda_forge_check=args.skip_conda_forge_check,
+        use_mamba=not args.disable_mamba,
     ))
     LOGGER.info("Package finding complete")
 
