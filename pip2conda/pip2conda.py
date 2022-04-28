@@ -227,6 +227,7 @@ def parse_all_requirements(
     python_version=None,
     extras=[],
     requirements_files=[],
+    skip_build_requires=False,
 ):
     """Parse all requirements for a project
 
@@ -246,6 +247,10 @@ def parse_all_requirements(
         list of paths to Pip requirements.txt-format files that list
         package requirements.
 
+    skip_build_requires : `bool`, optional
+        if `True` skip parsing `build-requires` from `pyproject.toml` or
+        `setup.cfg`
+
     Yields
     ------
     requirements : `str`
@@ -260,13 +265,14 @@ def parse_all_requirements(
         yield f"python={python_version}.*"
 
     # then build requirements
-    LOGGER.info("Processing build-requires")
-    for req in parse_requirements(
-        parse_build_requires(project_dir),
-        conda_forge_map=conda_forge_map,
-    ):
-        LOGGER.debug(f"    parsed {req}")
-        yield req
+    if not skip_build_requires:
+        LOGGER.info("Processing build-requires")
+        for req in parse_requirements(
+            parse_build_requires(project_dir),
+            conda_forge_map=conda_forge_map,
+        ):
+            LOGGER.debug(f"    parsed {req}")
+            yield req
 
     # then setup.cfg options
     setup_cfg = project_dir / "setup.cfg"
@@ -448,6 +454,13 @@ def create_parser():
         help="include all extras",
     )
     parser.add_argument(
+        "-b",
+        "--no-build-requires",
+        action="store_true",
+        default=False,
+        help="skip parsing of build-requires from pyproject.toml or setup.cfg",
+    )
+    parser.add_argument(
         "-r",
         "--requirements",
         type=Path,
@@ -509,6 +522,7 @@ def pip2conda(
         python_version=None,
         extras=[],
         requirements_files=[],
+        skip_build_requires=False,
         skip_conda_forge_check=False,
         use_mamba=True,
 ):
@@ -518,6 +532,7 @@ def pip2conda(
         python_version=python_version,
         extras=extras,
         requirements_files=requirements_files,
+        skip_build_requires=skip_build_requires,
     )
 
     if skip_conda_forge_check:
@@ -550,6 +565,7 @@ def main(args=None):
         python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
         requirements_files=args.requirements,
+        skip_build_requires=args.no_build_requires,
         skip_conda_forge_check=args.skip_conda_forge_check,
         use_mamba=not args.disable_mamba,
     ))
