@@ -202,8 +202,6 @@ def parse_build_requires(project_dir):
 def parse_requirements_file(file, **kwargs):
     """Parse a requirements.txt-format file
     """
-    print(type(file), file)
-
     if isinstance(file, (str, os.PathLike)):
         with open(file, "r") as fileobj:
             yield from parse_requirements_file(fileobj, **kwargs)
