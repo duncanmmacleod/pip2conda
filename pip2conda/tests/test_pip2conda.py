@@ -114,3 +114,28 @@ test =
     }
     assert expected.issubset(result)
     assert "oldest-supported-numpy" not in result
+
+
+def test_end2end_requirements(tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("""
+mock ; python_version < '3.0'
+numpy
+scipy >= 1.4.0
+""")
+    out = tmp_path / "out.txt"
+    pip2conda_main(args=[
+        "--no-build-requires",
+        "--output", str(out),
+        "--project-dir", str(tmp_path),
+        "--requirements", str(requirements),
+        "--skip-conda-forge-check",
+    ])
+
+    # validate the result
+    result = sorted(out.read_text().splitlines())
+    expected = {
+        "numpy",
+        "scipy>=1.4.0",
+    }
+    assert expected.issubset(result)
