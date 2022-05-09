@@ -199,7 +199,36 @@ def parse_build_requires(project_dir):
         return ppt["build-system"]["requires"]
 
 
-def parse_all_requirements(project_dir, python_version=None, extras=[]):
+def parse_requirements_file(file, **kwargs):
+    """Parse a requirements.txt-format file
+    """
+    print(type(file), file)
+
+    if isinstance(file, (str, os.PathLike)):
+        with open(file, "r") as fileobj:
+            yield from parse_requirements_file(fileobj, **kwargs)
+            return
+
+    for line in map(str.strip, file):
+        if (
+            not line  # blank line
+            or line.startswith("#")  # comment
+            or "://" in line  # URL
+        ):
+            continue
+        if line.startswith("-r "):
+            yield from parse_requirements_file(line[3:].strip(), **kwargs)
+        else:
+            yield from parse_requirements(line, **kwargs)
+
+
+def parse_all_requirements(
+    project_dir,
+    python_version=None,
+    extras=[],
+    requirements_files=[],
+    skip_build_requires=False,
+):
     """Parse all requirements for a project
 
     Parameters
@@ -213,6 +242,14 @@ def parse_all_requirements(project_dir, python_version=None, extras=[]):
     extras : `list` of `str` or ``'ALL'``
         the list of extras to parse from the ``'options.extras_require'``
         key, or ``'ALL'`` to read all of them
+
+    requirements_files : `list` of `str`
+        list of paths to Pip requirements.txt-format files that list
+        package requirements.
+
+    skip_build_requires : `bool`, optional
+        if `True` skip parsing `build-requires` from `pyproject.toml` or
+        `setup.cfg`
 
     Yields
     ------
@@ -228,17 +265,41 @@ def parse_all_requirements(project_dir, python_version=None, extras=[]):
         yield f"python={python_version}.*"
 
     # then build requirements
-    LOGGER.info("Processing build-requires")
-    for req in parse_requirements(
-        parse_build_requires(project_dir),
-        conda_forge_map=conda_forge_map,
-    ):
-        LOGGER.debug(f"    parsed {req}")
-        yield req
+    if not skip_build_requires:
+        LOGGER.info("Processing build-requires")
+        for req in parse_requirements(
+            parse_build_requires(project_dir),
+            conda_forge_map=conda_forge_map,
+        ):
+            LOGGER.debug(f"    parsed {req}")
+            yield req
 
     # then setup.cfg options
+    setup_cfg = project_dir / "setup.cfg"
+    if setup_cfg.exists():
+        LOGGER.info(f"Processing {setup_cfg}")
+        for req in parse_setup_cfg(
+            setup_cfg,
+            extras=extras,
+            conda_forge_map=conda_forge_map,
+        ):
+            LOGGER.debug(f"    parsed {req}")
+            yield req
+
+    # then requirements.txt files
+    for reqfile in requirements_files:
+        LOGGER.info(f"Processing {reqfile}")
+        for req in parse_requirements_file(
+            reqfile,
+            conda_forge_map=conda_forge_map,
+        ):
+            LOGGER.debug(f"    parsed {req}")
+            yield req
+
+
+def parse_setup_cfg(path, extras=None, conda_forge_map=dict()):
     conf = ConfigParser()
-    with open(project_dir / "setup.cfg", "r") as file:
+    with open(path, "r") as file:
         conf.read_file(file)
 
     if extras == "ALL":  # use all extras
@@ -246,7 +307,7 @@ def parse_all_requirements(project_dir, python_version=None, extras=[]):
 
     options = [
         ("options", "install_requires"),
-    ] + [("options.extras_require", extra) for extra in extras]
+    ] + [("options.extras_require", extra) for extra in extras or []]
 
     for sect, opt in options:
         LOGGER.info(f"Processing {sect}/{opt}")
@@ -393,6 +454,22 @@ def create_parser():
         help="include all extras",
     )
     parser.add_argument(
+        "-b",
+        "--no-build-requires",
+        action="store_true",
+        default=False,
+        help="skip parsing of build-requires from pyproject.toml or setup.cfg",
+    )
+    parser.add_argument(
+        "-r",
+        "--requirements",
+        type=Path,
+        default=[],
+        action="extend",
+        help="path of Pip requirements file to parse",
+        nargs="*",
+    )
+    parser.add_argument(
         "-d",
         "--project-dir",
         default=os.getcwd(),
@@ -444,6 +521,8 @@ def pip2conda(
         project_dir,
         python_version=None,
         extras=[],
+        requirements_files=[],
+        skip_build_requires=False,
         skip_conda_forge_check=False,
         use_mamba=True,
 ):
@@ -452,6 +531,8 @@ def pip2conda(
         project_dir,
         python_version=python_version,
         extras=extras,
+        requirements_files=requirements_files,
+        skip_build_requires=skip_build_requires,
     )
 
     if skip_conda_forge_check:
@@ -483,6 +564,8 @@ def main(args=None):
         args.project_dir,
         python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
+        requirements_files=args.requirements,
+        skip_build_requires=args.no_build_requires,
         skip_conda_forge_check=args.skip_conda_forge_check,
         use_mamba=not args.disable_mamba,
     ))
