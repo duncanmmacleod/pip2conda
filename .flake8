@@ -1,0 +1,11 @@
+[flake8]
+select =
+	E,
+	F,
+	W,
+ignore =
+	W503,
+exclude =
+	pip2conda/_version.py,
+per-file-ignores =
+	__init__.py:F401

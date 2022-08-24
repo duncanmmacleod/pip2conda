@@ -1,10 +1,88 @@
+# -- build --------
+
 [build-system]
 requires = [
-    "setuptools>=42",
-    "setuptools_scm[toml]>=3.4",
+    "setuptools>=61.0",
+    "setuptools_scm[toml]>=3.4.3",
     "wheel",
 ]
 build-backend = "setuptools.build_meta"
+
+# -- metadata -----
+
+[project]
+name = "pip2conda"
+description = "Translate pip requirements into conda requirements"
+readme = "README.md"
+authors = [
+	{ name = "Duncan Macleod", email = "duncanmmacleod@gmail.com" },
+]
+license = { text = "GPL-3.0-or-later" }
+classifiers = [
+	"Development Status :: 4 - Beta",
+	"Intended Audience :: Developers",
+	"License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+	"Natural Language :: English",
+	"Operating System :: OS Independent",
+	"Programming Language :: Python",
+	"Programming Language :: Python :: 3",
+	"Programming Language :: Python :: 3.8",
+	"Programming Language :: Python :: 3.9",
+	"Programming Language :: Python :: 3.10",
+	"Topic :: Software Development",
+	"Topic :: Software Development :: Build Tools",
+	"Topic :: Software Development :: Testing",
+]
+
+# requirements:
+requires-python = ">=3.8"
+dependencies = [
+	"grayskull >=1.0.0",
+	"requests",
+	"ruamel.yaml",
+	"setuptools",
+	"tomli",
+]
+
+# dynamic properties set by tools:
+dynamic = [
+	"version",
+]
+
+[project.optional-dependencies]
+test = [
+	"pytest",
+	"pytest-cov",
+]
+docs = [
+	"myst-parser",
+	"sphinx",
+	"sphinx_rtd_theme",
+]
+
+[project.scripts]
+pip2conda = "pip2conda.pip2conda:main"
+
+[project.urls]
+"Bug Tracker" = "https://github.com/duncanmmacleod/pip2conda/issues"
+"Documentation" = "https://pip2conda.readthedocs.io"
+"Homepage" = "https://github.com/duncanmmacleod/pip2conda/"
+"Source Code" = "https://github.com/duncanmmacleod/pip2conda.git"
+
+# -- tools --------
+
+[tool.setuptools]
+license-files = [
+	"LICENSE",
+]
+
+[tool.setuptools.packages.find]
+# note: this is only required in CI, which otherwise fails because
+#       someone is creating a temporary directory that setuptools
+#       discovers as a nother top-level package
+include = [
+	"pip2conda*",
+]
 
 [tool.setuptools_scm]
 write_to = "pip2conda/_version.py"
