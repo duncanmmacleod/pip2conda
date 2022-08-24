@@ -364,7 +364,7 @@ def find_packages(requirements, use_mamba=True):
                 f"{pfind.stdout}".rstrip()
             )
             LOGGER.debug("trying again with conda")
-            return(find_packages(requirements, use_mamba=False))
+            return find_packages(requirements, use_mamba=False)
 
     return pfind
 
