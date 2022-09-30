@@ -35,13 +35,13 @@ classifiers = [
 ]
 
 # requirements:
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
+	"build",
 	"grayskull >=1.0.0",
 	"requests",
 	"ruamel.yaml",
-	"setuptools",
-	"tomli",
+	"packaging",
 ]
 
 # dynamic properties set by tools:
@@ -91,4 +91,5 @@ write_to = "pip2conda/_version.py"
 addopts = "-r a"
 filterwarnings = [
 	"error",
+	"ignore:Support for::setuptools",
 ]
