@@ -202,7 +202,7 @@ def parse_req_extras(req, conda_forge_map=dict()):
 
     # parse the requirements that match the requested extras
     yield from parse_requirements(
-        data["info"]["requires_dist"],
+        data["info"]["requires_dist"] or [],
         conda_forge_map=conda_forge_map,
         extras=req.extras,
         depth=1,
