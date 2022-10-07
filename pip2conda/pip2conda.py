@@ -13,15 +13,20 @@ import os
 import re
 import subprocess
 import tempfile
-from configparser import ConfigParser
+from importlib.metadata import PathDistribution
 from pathlib import Path
 from shutil import which
 
 import requests
 
-import tomli
+from packaging.requirements import Requirement
 
-import pkg_resources
+from build import (
+    BuildBackendException,
+    BuildException,
+    ProjectBuilder,
+)
+from build.env import IsolatedEnvBuilder
 
 from grayskull.strategy.pypi import PYPI_CONFIG
 from ruamel.yaml import YAML
@@ -51,6 +56,8 @@ if not LOGGER.hasHandlers():
 # regex to match version spec characters
 VERSION_OPERATOR = re.compile("[><=!]")
 
+
+# -- conda utilities --------
 
 def load_conda_forge_name_map():
     """Load the PyPI <-> conda-forge package name map from grayskull
@@ -94,8 +101,84 @@ def format_requirement(requirement, conda_forge_map=dict()):
     ).strip()
 
 
-def parse_extras(req, conda_forge_map=dict()):
-    """Parse the extras for a requirement
+# -- python metadata parsing
+
+def parse_setup_requires(project_dir):
+    """Parse the list of `setup_requires` packages from a setuptools dist.
+
+    Parameters
+    ----------
+    project_dir : `pathlib.Path`
+        The path to the project to be parsed.
+
+    Returns
+    -------
+    setup_requires : `list`
+        The list of build requirements.
+    """
+    from setuptools import Distribution
+    origin = Path().cwd()
+    os.chdir(project_dir)
+    try:
+        dist = Distribution()
+        dist.parse_config_files()
+    finally:
+        os.chdir(origin)
+    return dist.setup_requires
+
+
+def build_project_metadata(project_dir):
+    """Build the metadata for a project.
+
+    This function is basically a stripped down version of
+    the python-build interface, which only generates the metadata
+    and then stops.
+
+    This function may generated a temporary environment in which to
+    install the backend, if required.
+
+    Parameters
+    ----------
+    project_dir : `pathlib.Path`
+        The project to build.
+
+    Returns
+    -------
+    meta : `dict`
+        The package metadata as parsed by
+        `importlib.metadata.Distribution.metadata.json`.
+    """
+    LOGGER.info(f"building metadata for {project_dir}")
+
+    # use python-build to generate the build metadata
+    builder = ProjectBuilder(project_dir)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            metadir = builder.prepare("wheel", tmpdir)
+        except BuildBackendException:
+            # the backend is missing, so we need to
+            # install it on-the-fly
+            with IsolatedEnvBuilder() as env:
+                builder.python_executable = env.executable
+                env.install(builder.build_system_requires)
+                metadir = builder.prepare("wheel", tmpdir)
+        dist = PathDistribution(Path(metadir))
+        meta = dist.metadata.json
+
+    # inject the build system requirements into the metadata
+    if (project_dir / "pyproject.toml").is_file():
+        build_requires = builder.build_system_requires
+    else:
+        # not given in pyproject.toml, so need to parse
+        # manually from setup.cfg
+        build_requires = parse_setup_requires(project_dir)
+    meta["build_system_requires"] = build_requires
+
+    return meta
+
+
+def parse_req_extras(req, conda_forge_map=dict()):
+    """Parse the extras for a requirement.
 
     This unpackes a requirement like `package[extra]` into the list of
     actual packages that are required, and yields formatted conda
@@ -119,7 +202,7 @@ def parse_extras(req, conda_forge_map=dict()):
 
     # parse the requirements that match the requested extras
     yield from parse_requirements(
-        data["info"]["requires_dist"],
+        data["info"]["requires_dist"] or [],
         conda_forge_map=conda_forge_map,
         extras=req.extras,
         depth=1,
@@ -140,14 +223,18 @@ def _evaluate_marker(marker, extras=None):
         return any(marker.evaluate({"extra": extra}) for extra in extras)
 
 
-def parse_requirements(lines, conda_forge_map=dict(), extras=None, depth=0):
+def parse_requirements(
+    requirements,
+    conda_forge_map=dict(),
+    extras=None,
+    depth=0,
+):
     """Parse requirement specs from a list of lines
 
     Parameters
     ----------
-    lines : iterable of `str`
-        input to iterate over, e.g. a `list` of package names, or
-        a `file` object
+    requirements : `list` of `packaging.requirements.Requirement`
+        The list of requirements to parse.
 
     conda_forge_map : `dict`
         `(pypi_name, conda_forge_name)` mapping dictionary
@@ -164,43 +251,26 @@ def parse_requirements(lines, conda_forge_map=dict(), extras=None, depth=0):
     spec : `pkg_resources.Requirement`
         a formatted requirement for each line
     """
-    for item in pkg_resources.parse_requirements(lines):
+    for entry in requirements:
         if not depth:  # print top-level requirements
-            LOGGER.debug(f"  parsing {item}")
+            LOGGER.debug(f"  parsing {entry}")
+        req = Requirement(entry)
         # if environment markers don't pass, skip
-        if not _evaluate_marker(item.marker, extras=extras):
+        if not _evaluate_marker(req.marker, extras=extras):
             continue
         # if requirement is a URL, skip
-        if item.url:
+        if req.url:
             continue
         # if requirement includes extras, parse those recursively
-        yield from parse_extras(item, conda_forge_map=conda_forge_map)
+        yield from parse_req_extras(req, conda_forge_map=conda_forge_map)
         # format as 'name{>=version}'
-        yield format_requirement(item, conda_forge_map=conda_forge_map)
+        yield format_requirement(req, conda_forge_map=conda_forge_map)
 
 
-def parse_build_requires(project_dir):
-    """Parse the build requirements for a project
-
-    This reads from either pyproject.toml (preferred) or setup.cfg.
-    """
-    project_dir = Path(project_dir)
-    pyproject_toml = project_dir / "pyproject.toml"
-    try:
-        with open(pyproject_toml, "rb") as file:
-            ppt = tomli.load(file)
-    except FileNotFoundError:
-        LOGGER.debug("  failed to read pyproject.toml, reading setup.cfg")
-        setup_cfg = project_dir / "setup.cfg"
-        conf = ConfigParser()
-        conf.read(setup_cfg)
-        return conf["options"]["setup_requires"].strip().splitlines()
-    else:
-        return ppt["build-system"]["requires"]
-
+# -- requirements.txt -------
 
 def parse_requirements_file(file, **kwargs):
-    """Parse a requirements.txt-format file
+    """Parse a requirements.txt-format file.
     """
     if isinstance(file, (str, os.PathLike)):
         with open(file, "r") as fileobj:
@@ -217,7 +287,7 @@ def parse_requirements_file(file, **kwargs):
         if line.startswith("-r "):
             yield from parse_requirements_file(line[3:].strip(), **kwargs)
         else:
-            yield from parse_requirements(line, **kwargs)
+            yield from parse_requirements([line], **kwargs)
 
 
 def parse_all_requirements(
@@ -257,32 +327,45 @@ def parse_all_requirements(
     # load the map from grayskull
     conda_forge_map = load_conda_forge_name_map()
 
-    # add python first
+    # parse project metadata
+    try:
+        meta = build_project_metadata(project_dir)
+    except BuildException:
+        if not requirements_files:
+            # we need _something_ to work with
+            raise
+        meta = {}
+
+    # parse python version
+    if not python_version and "requires_python" in meta:
+        python_version = meta["requires_python"]
     if python_version:
         LOGGER.info(f"Using Python {python_version}")
-        yield f"python={python_version}.*"
+        if not python_version.startswith((">", "<", "=")):
+            python_version = f"={python_version}.*"
+        yield f"python{python_version}"
 
     # then build requirements
     if not skip_build_requires:
-        LOGGER.info("Processing build-requires")
+        LOGGER.info("Processing build-system/requires")
         for req in parse_requirements(
-            parse_build_requires(project_dir),
+            meta.get("build_system_requires", []),
             conda_forge_map=conda_forge_map,
         ):
             LOGGER.debug(f"    parsed {req}")
             yield req
 
-    # then setup.cfg options
-    setup_cfg = project_dir / "setup.cfg"
-    if setup_cfg.exists():
-        LOGGER.info(f"Processing {setup_cfg}")
-        for req in parse_setup_cfg(
-            setup_cfg,
-            extras=extras,
-            conda_forge_map=conda_forge_map,
-        ):
-            LOGGER.debug(f"    parsed {req}")
-            yield req
+    # then runtime requirements
+    LOGGER.info("Processing requires_dist")
+    if extras == "ALL":
+        extras = meta["provides_extra"]
+    for req in parse_requirements(
+        meta.get("requires_dist", []),
+        extras=extras,
+        conda_forge_map=conda_forge_map,
+    ):
+        LOGGER.debug(f"    parsed {req}")
+        yield req
 
     # then requirements.txt files
     for reqfile in requirements_files:
@@ -295,25 +378,7 @@ def parse_all_requirements(
             yield req
 
 
-def parse_setup_cfg(path, extras=None, conda_forge_map=dict()):
-    conf = ConfigParser()
-    with open(path, "r") as file:
-        conf.read_file(file)
-
-    if extras == "ALL":  # use all extras
-        extras = conf["options.extras_require"].keys()
-
-    options = [
-        ("options", "install_requires"),
-    ] + [("options.extras_require", extra) for extra in extras or []]
-
-    for sect, opt in options:
-        LOGGER.info(f"Processing {sect}/{opt}")
-        lines = conf[sect][opt].strip().splitlines()
-        for req in parse_requirements(lines, conda_forge_map=conda_forge_map):
-            LOGGER.debug(f"    parsed {req}")
-            yield req
-
+# -- conda ------------------
 
 def find_packages(requirements, use_mamba=True):
     """Run conda/mamba to resolve an environment
@@ -415,6 +480,8 @@ def filter_requirements(requirements, use_mamba=True):
     return requirements
 
 
+# -- output formatting ------
+
 def write_yaml(path, packages):
     """Write the given ``packages`` as a conda environment YAML file
     """
@@ -425,6 +492,38 @@ def write_yaml(path, packages):
     with open(path, "w") as file:
         yaml.dump(env, file)
 
+
+# -- pip2conda main func ----
+
+def pip2conda(
+        project_dir,
+        python_version=None,
+        extras=[],
+        requirements_files=[],
+        skip_build_requires=False,
+        skip_conda_forge_check=False,
+        use_mamba=True,
+):
+    # parse requirements
+    requirements = parse_all_requirements(
+        project_dir,
+        python_version=python_version,
+        extras=extras,
+        requirements_files=requirements_files,
+        skip_build_requires=skip_build_requires,
+    )
+
+    if skip_conda_forge_check:
+        return requirements
+
+    # filter out requirements that aren't available in conda-forge
+    return filter_requirements(
+        requirements,
+        use_mamba=use_mamba,
+    )
+
+
+# -- command line operation -
 
 def create_parser():
     """Create a command-line `ArgumentParser` for this tool
@@ -513,34 +612,6 @@ def create_parser():
         help="print verbose logging",
     )
     return parser
-
-
-def pip2conda(
-        project_dir,
-        python_version=None,
-        extras=[],
-        requirements_files=[],
-        skip_build_requires=False,
-        skip_conda_forge_check=False,
-        use_mamba=True,
-):
-    # parse requirements
-    requirements = parse_all_requirements(
-        project_dir,
-        python_version=python_version,
-        extras=extras,
-        requirements_files=requirements_files,
-        skip_build_requires=skip_build_requires,
-    )
-
-    if skip_conda_forge_check:
-        return requirements
-
-    # filter out requirements that aren't available in conda-forge
-    return filter_requirements(
-        requirements,
-        use_mamba=use_mamba,
-    )
 
 
 def main(args=None):

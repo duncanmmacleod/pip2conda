@@ -26,7 +26,10 @@ def mock_proc(returncode=0, data=dict()):
     return proc
 
 
-def test_end2end_mock(tmp_path):
+def test_setuptools_mock(tmp_path):
+    """Test parsing requirements of a mixed setuptools project
+    while mocking out a conda error.
+    """
     # write package information
     (tmp_path / "pyproject.toml").write_text("""[build-system]
 requires = [
@@ -72,13 +75,63 @@ install_requires =
     ]
 
 
+def test_setuptools_pyproject_toml(tmp_path):
+    """Test parsing requirements of a setuptools project using
+    only pyproject.toml, without checking with conda."
+    """
+    # write package information
+    (tmp_path / "pyproject.toml").write_text("""
+[build-system]
+requires = [ "setuptools" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pip2conda-tests"
+version = "0.0.0"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy >= 1.20.0",
+  "scipy",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest",
+]
+""")
+
+    # run the tool
+    out = tmp_path / "out.txt"
+    pip2conda_main(args=[
+        "--project-dir", str(tmp_path),
+        "--output", str(out),
+        "--skip-conda-forge-check",
+    ])
+
+    # assert that we get what we should
+    assert set(out.read_text().splitlines()) == {
+        "numpy>=1.20.0",
+        "python>=3.9",
+        "scipy",
+        "setuptools",
+    }
+
+
 @pytest.mark.skipif(
     not which("conda"),
     reason="cannot find conda",
 )
-def test_end2end_real(tmp_path):
+def test_setuptools_setup_cfg(tmp_path):
+    """Test parsing requirements of a setuptools project that doesn't
+    have a pyproject.toml file at all.
+    """
     # write package information (using exact pins for reproducibility)
-    (tmp_path / "setup.cfg").write_text("""[options]
+    (tmp_path / "setup.cfg").write_text("""
+[metadata]
+name = test
+version = 0.0.0
+
+[options]
 setup_requires =
     setuptools ==62.1.0
     setuptools_scm[toml] ==6.4.2
@@ -92,6 +145,10 @@ test =
     pytest
     pytest-cov
 """)
+    (tmp_path / "setup.py").write_text("""
+from setuptools import setup
+setup()
+""")
 
     # run the tool (mocking out the call to conda)
     out = tmp_path / "out.txt"
@@ -100,6 +157,8 @@ test =
             "--project-dir", str(tmp_path),
             "--output", str(out),
             "--all",
+            "--verbose",
+            "--verbose",
         ])
     except subprocess.CalledProcessError as exc:
         pytest.skip(str(exc))
@@ -110,13 +169,15 @@ test =
         "gwpy==2.1.3",
         "igwn-auth-utils==0.2.2",
         "safe-netrc>=1.0.0",
-        "setuptools>=42",
+        "setuptools==62.1.0",
     }
     assert expected.issubset(result)
     assert "oldest-supported-numpy" not in result
 
 
-def test_end2end_requirements(tmp_path):
+def test_requirements_txt(tmp_path):
+    """Test parsing requirements from requirements.txt files.
+    """
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("""
 mock ; python_version < '3.0'
@@ -139,3 +200,48 @@ scipy >= 1.4.0
         "scipy>=1.4.0",
     }
     assert expected.issubset(result)
+
+
+def test_poetry(tmp_path):
+    """Test parsing requirements from a poetry package.
+    """
+    (tmp_path / "pyproject.toml").write_text("""
+[build-system]
+requires = [ "poetry-core>=1.0.0" ]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "test"
+version = "0.0.0"
+description = "test project"
+authors = [ "Duncan Macleod <duncanmmacleod@gmail.com>" ]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+h5py = ">=2.10.0"
+# for tests
+pytest = {version="*", optional=true}
+
+[tool.poetry.extras]
+test = [ "pytest" ]
+""")
+    (tmp_path / "test.py").touch()
+
+    # run the tool
+    out = tmp_path / "out.txt"
+    pip2conda_main(args=[
+        "--output", str(out),
+        "--project-dir", str(tmp_path),
+        "--skip-conda-forge-check",
+        "--verbose",
+        "--verbose",
+        "test",
+    ])
+
+    # assert that we get what we should
+    assert set(out.read_text().splitlines()) == {
+        "h5py>=2.10.0",
+        "poetry-core>=1.0.0",
+        "pytest",
+        "python>=3.10,<4.0",
+    }

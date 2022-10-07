@@ -3,9 +3,10 @@
 `pip2conda` is a tool to translate `pip`-style requirements into `conda`
 requirements.
 
-`pip2conda` parses build requirements from ``pyproject.toml`` files, then
-runtime and extra requirements from ``setup.cfg``, including unpackging extras and
-evaluating environment markers, before matching translating each requirement
+`pip2conda2` uses [`build`](https://github.com/pypa/build) to generate
+the metadata for a project, and then parses out the build and
+runtime requirements for the project - including unpackging extras and
+evaluating environment markers - before matching translating each requirement
 into a conda-forge requirement suitable for installation with `conda/mamba`.
 
 [![PyPI version](https://badge.fury.io/py/pip2conda.svg)](http://badge.fury.io/py/pip2conda)
@@ -40,13 +41,13 @@ project repository does this:
 
 ```console
 $ pip2conda
-grayskull
-packaging>=20.0
+build
+grayskull>=1.0.0
+packaging
+python>=3.10
 requests
-setuptools
-setuptools>=42
-setuptools_scm>=3.4
-tomli
-tomli>=1.0.0
+ruamel.yaml
+setuptools-scm>=3.4.3
+setuptools>=61.0
 wheel
 ```
