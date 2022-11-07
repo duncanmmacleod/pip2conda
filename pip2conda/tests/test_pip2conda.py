@@ -97,6 +97,8 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "pytest",
+  "pytest-cov < 2.0.0; python_version < '3.11'",
+  "pytest-cov >= 2.0.0; python_version >= '3.11'",
 ]
 """)
 
@@ -104,14 +106,18 @@ test = [
     out = tmp_path / "out.txt"
     pip2conda_main(args=[
         "--project-dir", str(tmp_path),
+        "--python-version", "3.11",
         "--output", str(out),
         "--skip-conda-forge-check",
+        "test",
     ])
 
     # assert that we get what we should
     assert set(out.read_text().splitlines()) == {
         "numpy>=1.20.0",
-        "python>=3.9",
+        "pytest",
+        "pytest-cov>=2.0.0",
+        "python=3.11.*",
         "scipy",
         "setuptools",
     }

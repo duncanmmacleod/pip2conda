@@ -177,7 +177,7 @@ def build_project_metadata(project_dir):
     return meta
 
 
-def parse_req_extras(req, conda_forge_map=dict()):
+def parse_req_extras(req, environment=None, conda_forge_map=dict()):
     """Parse the extras for a requirement.
 
     This unpackes a requirement like `package[extra]` into the list of
@@ -203,13 +203,14 @@ def parse_req_extras(req, conda_forge_map=dict()):
     # parse the requirements that match the requested extras
     yield from parse_requirements(
         data["info"]["requires_dist"] or [],
+        environment=environment,
         conda_forge_map=conda_forge_map,
         extras=req.extras,
         depth=1,
     )
 
 
-def _evaluate_marker(marker, extras=None):
+def _evaluate_marker(marker, environment=None, extras=None):
     """Evaluate whether an environment marker matches this environment
     """
     if not marker:  # no marker, always True
@@ -220,12 +221,16 @@ def _evaluate_marker(marker, extras=None):
         extras = extras or []
         # marker includes extras (probably), evaluate for any of the given
         # extras
-        return any(marker.evaluate({"extra": extra}) for extra in extras)
+        return any(
+            marker.evaluate((environment or {}) | {"extra": extra})
+            for extra in extras
+        )
 
 
 def parse_requirements(
     requirements,
     conda_forge_map=dict(),
+    environment=None,
     extras=None,
     depth=0,
 ):
@@ -238,6 +243,9 @@ def parse_requirements(
 
     conda_forge_map : `dict`
         `(pypi_name, conda_forge_name)` mapping dictionary
+
+    environment : `dict`
+        the environment against which to evaluate the marker
 
     extras : `list` of `str`
         list of extras to include in the environment marker evaluation
@@ -256,13 +264,21 @@ def parse_requirements(
             LOGGER.debug(f"  parsing {entry}")
         req = Requirement(entry)
         # if environment markers don't pass, skip
-        if not _evaluate_marker(req.marker, extras=extras):
+        if not _evaluate_marker(
+            req.marker,
+            environment=environment,
+            extras=extras,
+        ):
             continue
         # if requirement is a URL, skip
         if req.url:
             continue
         # if requirement includes extras, parse those recursively
-        yield from parse_req_extras(req, conda_forge_map=conda_forge_map)
+        yield from parse_req_extras(
+            req,
+            environment=environment,
+            conda_forge_map=conda_forge_map,
+        )
         # format as 'name{>=version}'
         yield format_requirement(req, conda_forge_map=conda_forge_map)
 
@@ -336,8 +352,18 @@ def parse_all_requirements(
             raise
         meta = {}
 
+    # generate environment for markers
+    environment = {}
+
     # parse python version
-    if not python_version and "requires_python" in meta:
+    if python_version:
+        # use user-given Python version to seed the marker environment
+        parts = python_version.split(".")
+        while len(parts) < 3:
+            parts.append("0")
+        environment["python_version"] = ".".join(parts[:2])
+        environment["python_full_version"] = ".".join(parts)
+    elif "requires_python" in meta:
         python_version = meta["requires_python"]
     if python_version:
         LOGGER.info(f"Using Python {python_version}")
@@ -350,6 +376,7 @@ def parse_all_requirements(
         LOGGER.info("Processing build-system/requires")
         for req in parse_requirements(
             meta.get("build_system_requires", []),
+            environment=environment,
             conda_forge_map=conda_forge_map,
         ):
             LOGGER.debug(f"    parsed {req}")
@@ -361,6 +388,7 @@ def parse_all_requirements(
         extras = meta["provides_extra"]
     for req in parse_requirements(
         meta.get("requires_dist", []),
+        environment=environment,
         extras=extras,
         conda_forge_map=conda_forge_map,
     ):
@@ -372,6 +400,7 @@ def parse_all_requirements(
         LOGGER.info(f"Processing {reqfile}")
         for req in parse_requirements_file(
             reqfile,
+            environment=environment,
             conda_forge_map=conda_forge_map,
         ):
             LOGGER.debug(f"    parsed {req}")
