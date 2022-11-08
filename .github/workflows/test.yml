@@ -63,17 +63,15 @@ jobs:
     - name: Conda info
       run: conda info --all
 
-    - name: Install build/test requirements
-      run: |
-          mamba install --quiet --yes --name test \
-              build \
-              coverage \
-              pytest \
-              pytest-cov \
-          ;
-
     - name: Create distributions
-      run: python -m build . --sdist --wheel --outdir .
+      run: |
+        # create isolated environment for build
+        mamba create -n build --quiet --yes \
+            python=${{ matrix.python-version }} \
+            python-build \
+        ;
+        # create distributions
+        mamba run -n build python -m build . --sdist --wheel --outdir .
 
     - name: Install this project with test extras
       run: |
