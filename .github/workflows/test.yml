@@ -36,6 +36,7 @@ jobs:
           - Windows
         python-version:
           - "3.10"
+          - "3.11"
     runs-on: ${{ matrix.os }}-latest
 
     # this is needed for conda environments to activate automatically
@@ -62,17 +63,15 @@ jobs:
     - name: Conda info
       run: conda info --all
 
-    - name: Install build/test requirements
-      run: |
-          mamba install --quiet --yes --name test \
-              build \
-              coverage \
-              pytest \
-              pytest-cov \
-          ;
-
     - name: Create distributions
-      run: python -m build . --sdist --wheel --outdir .
+      run: |
+        # create isolated environment for build
+        mamba create -n build --quiet --yes \
+            python=${{ matrix.python-version }} \
+            python-build \
+        ;
+        # create distributions
+        mamba run -n build python -m build . --sdist --wheel --outdir .
 
     - name: Install this project with test extras
       run: |
@@ -97,7 +96,7 @@ jobs:
       run: python -m coverage xml
 
     - name: Publish coverage to Codecov
-      uses: codecov/codecov-action@v2
+      uses: codecov/codecov-action@v3
       with:
         files: ./coverage.xml
         flags: ${{ runner.os }},python${{ matrix.python-version }}
