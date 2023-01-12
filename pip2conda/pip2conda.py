@@ -211,20 +211,22 @@ def parse_req_extras(req, environment=None, conda_forge_map=dict()):
 
 
 def _evaluate_marker(marker, environment=None, extras=None):
-    """Evaluate whether an environment marker matches this environment
+    """Evaluate whether an environment marker matches this environment.
     """
     if not marker:  # no marker, always True
         return True
-    try:
-        return marker.evaluate()  # built-in environment
-    except ValueError:
-        extras = extras or []
-        # marker includes extras (probably), evaluate for any of the given
-        # extras
-        return any(
-            marker.evaluate((environment or {}) | {"extra": extra})
-            for extra in extras
-        )
+
+    if environment is None:
+        environment = {}
+    if extras is None:
+        extras = []
+
+    # loop over all extras (including 'no extra') and see if there's a match
+    for extra in {""} | set(extras):
+        environment["extra"] = extra
+        if marker.evaluate(environment):
+            return True
+    return False
 
 
 def parse_requirements(
