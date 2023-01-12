@@ -14,10 +14,13 @@ import pytest
 
 from ..pip2conda import (
     main as pip2conda_main,
+    parse_requirements,
 )
 
 __author__ = "Duncan Macleod <duncanmmacleod@gmail.com>"
 
+
+# -- utilities --------------
 
 def mock_proc(returncode=0, data=dict()):
     proc = mock.create_autospec(subprocess.CompletedProcess)
@@ -25,6 +28,77 @@ def mock_proc(returncode=0, data=dict()):
     proc.stdout = json.dumps(data)
     return proc
 
+
+# -- unit tests -------------
+
+@pytest.mark.parametrize(("reqs", "environment", "extras", "result"), [
+    # simple list of packages, no environmment, no extras
+    (
+        ["a", "b"],
+        None,
+        None,
+        ["a", "b"],
+    ),
+    # environment marker with negative match
+    (
+        ["a ; python_version < '2.0'", "b"],
+        {"python_version": "2.0"},
+        None,
+        ["b"],
+    ),
+    # environment marker and extra with negative match
+    (
+        ["a ; python_version >= '2.0' and extra == 'test'", "b"],
+        {"python_version": "2.0"},
+        None,
+        ["b"],
+    ),
+    # no environment marker and extra with negative match
+    (
+        ["a ; python_version >= '2.0' and extra == 'test'", "b"],
+        None,
+        ["dev"],
+        ["b"],
+    ),
+    # environment marker and extra with positive match
+    (
+        ["a ; python_version >= '2.0' and extra == 'test'", "b"],
+        {"python_version": "2.0"},
+        ["test"],
+        ["a", "b"],
+    ),
+    # environment marker and extra with positive and negative matches
+    (
+        [
+            "a ; python_version >= '2.0' and extra == 'test'",
+            "b ; extra == 'dev'",
+        ],
+        {"python_version": "2.0"},
+        ["test", "doc"],
+        ["a"],
+    ),
+    # environment marker and extras with multiple positive matches
+    (
+        [
+            "a ; python_version >= '2.0' and extra == 'test'",
+            "b ; extra == 'dev'",
+        ],
+        {"python_version": "2.0"},
+        ["test", "dev", "doc"],
+        ["a", "b"],
+    ),
+])
+def test_parse_requirements(reqs, environment, extras, result):
+    """Test that :func:`parse_requirements` correctly evaluates markers.
+    """
+    assert list(parse_requirements(
+        reqs,
+        environment=environment,
+        extras=extras,
+    )) == result
+
+
+# -- end-to-end tests -------
 
 def test_setuptools_mock(tmp_path):
     """Test parsing requirements of a mixed setuptools project
