@@ -13,6 +13,8 @@ from unittest import mock
 
 import pytest
 
+from build import BuildException
+
 import requests
 
 from ..pip2conda import (
@@ -368,3 +370,12 @@ def test_wheel(tmp_path, whl):
         "requests",
         "ruamel.yaml",
     }
+
+
+def test_error(tmp_path):
+    """Test that giving no valid input results in an error.
+    """
+    with pytest.raises(BuildException):
+        pip2conda_main(args=[
+            "--project-dir", str(tmp_path),
+        ])
