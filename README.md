@@ -3,10 +3,9 @@
 `pip2conda` is a tool to translate `pip`-style requirements into `conda`
 requirements.
 
-`pip2conda2` uses [`build`](https://github.com/pypa/build) to generate
-the metadata for a project, and then parses out the build and
-runtime requirements for the project - including unpackging extras and
-evaluating environment markers - before matching translating each requirement
+`pip2conda2` reads or generates the metadata for a project,
+evaluating the build (if possible) and runtime requirements - including unpackging
+extras and evaluating environment markers - before translating each requirement
 into a conda-forge requirement suitable for installation with `conda/mamba`.
 
 [![PyPI version](https://badge.fury.io/py/pip2conda.svg)](http://badge.fury.io/py/pip2conda)
@@ -36,7 +35,8 @@ python -m pip install pip2conda
 
 ## Basic Usage
 
-Just execute `pip2conda` from the base of your project directory.
+Just execute `pip2conda` from the base of your project directory, or point
+it at a wheel file for any project.
 For example, running `pip2conda` in the base directory for its own
 project repository does this:
 

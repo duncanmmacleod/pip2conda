@@ -91,4 +91,5 @@ addopts = "-r a"
 filterwarnings = [
 	"error",
 	"ignore:Support for::setuptools",
+	"ignore:.*pkg_resources",
 ]
