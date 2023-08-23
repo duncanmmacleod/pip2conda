@@ -19,6 +19,8 @@ from shutil import which
 
 import requests
 
+from wheel.wheelfile import WheelFile
+
 from packaging.requirements import Requirement
 
 from build import (
@@ -125,6 +127,26 @@ def parse_setup_requires(project_dir):
     finally:
         os.chdir(origin)
     return dist.setup_requires
+
+
+def read_wheel_metadata(path):
+    """Read the metadata for a project from a wheel.
+    """
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        WheelFile(path, "r") as whl,
+    ):
+        tmpdir = Path(tmpdir)
+        # extract only the dist_info directory
+        distinfo = [
+            name for name in whl.namelist()
+            if name.startswith(f"{whl.dist_info_path}/")
+        ]
+        whl.extractall(members=distinfo, path=tmpdir)
+        # return the metadata as JSON
+        return PathDistribution(
+            tmpdir / whl.dist_info_path,
+        ).metadata.json
 
 
 def build_project_metadata(project_dir):
@@ -309,7 +331,7 @@ def parse_requirements_file(file, **kwargs):
 
 
 def parse_all_requirements(
-    project_dir,
+    project,
     python_version=None,
     extras=[],
     requirements_files=[],
@@ -319,8 +341,8 @@ def parse_all_requirements(
 
     Parameters
     ----------
-    project_dir : `pathlib.Path`
-        the base path of the project
+    project : `pathlib.Path`
+        the base path of the project, or the path to a wheel file
 
     python_version : `str`, optional
         the ``'X.Y'`` python version to use
@@ -346,13 +368,16 @@ def parse_all_requirements(
     conda_forge_map = load_conda_forge_name_map()
 
     # parse project metadata
-    try:
-        meta = build_project_metadata(project_dir)
-    except BuildException:
-        if not requirements_files:
-            # we need _something_ to work with
-            raise
-        meta = {}
+    if project.suffix == ".whl":
+        meta = read_wheel_metadata(project)
+    else:
+        try:
+            meta = build_project_metadata(project)
+        except BuildException:
+            if not requirements_files:
+                # we need _something_ to work with
+                raise
+            meta = {}
 
     # generate environment for markers
     environment = {}
@@ -527,7 +552,7 @@ def write_yaml(path, packages):
 # -- pip2conda main func ----
 
 def pip2conda(
-        project_dir,
+        project,
         python_version=None,
         extras=[],
         requirements_files=[],
@@ -537,7 +562,7 @@ def pip2conda(
 ):
     # parse requirements
     requirements = parse_all_requirements(
-        project_dir,
+        project,
         python_version=python_version,
         extras=extras,
         requirements_files=requirements_files,
@@ -599,10 +624,12 @@ def create_parser():
     )
     parser.add_argument(
         "-d",
+        "--project",
         "--project-dir",
+        "--wheel",
         default=os.getcwd(),
         type=Path,
-        help="project base directory",
+        help="project directory, or path to wheel",
     )
     parser.add_argument(
         "-p",
@@ -661,7 +688,7 @@ def main(args=None):
 
     # run the thing
     requirements = sorted(pip2conda(
-        args.project_dir,
+        args.project,
         python_version=args.python_version,
         extras="ALL" if args.all else args.extras_name,
         requirements_files=args.requirements,
