@@ -7,10 +7,13 @@
 
 import json
 import subprocess
+from pathlib import Path
 from shutil import which
 from unittest import mock
 
 import pytest
+
+import requests
 
 from ..pip2conda import (
     main as pip2conda_main,
@@ -18,6 +21,11 @@ from ..pip2conda import (
 )
 
 __author__ = "Duncan Macleod <duncanmmacleod@gmail.com>"
+
+PIP2CONDA_WHL = (
+    "https://files.pythonhosted.org/packages/py3/p/pip2conda/"
+    "pip2conda-0.4.2-py3-none-any.whl"
+)
 
 
 # -- utilities --------------
@@ -27,6 +35,19 @@ def mock_proc(returncode=0, data=dict()):
     proc.returncode = returncode
     proc.stdout = json.dumps(data)
     return proc
+
+
+@pytest.fixture
+def whl(tmp_path):
+    try:
+        resp = requests.get(PIP2CONDA_WHL)
+        resp.raise_for_status()
+    except requests.RequestException as exc:  # pragma: no cover
+        pytest.skip(str(exc))
+    whl = tmp_path / Path(PIP2CONDA_WHL).name
+    with open(whl, "wb") as file:
+        file.write(resp.content)
+    return whl
 
 
 # -- unit tests -------------
@@ -324,4 +345,26 @@ test = [ "pytest" ]
         "poetry-core>=1.0.0",
         "pytest",
         "python>=3.10,<4.0",
+    }
+
+
+def test_wheel(tmp_path, whl):
+    """Test parsing requirements from a wheel file.
+    """
+    # run the tool
+    out = tmp_path / "out.txt"
+    pip2conda_main(args=[
+        "--output", str(out),
+        "--wheel", str(whl),
+        "--skip-conda-forge-check",
+    ])
+
+    # assert that we get what we should
+    assert set(out.read_text().splitlines()) == {
+        "build",
+        "grayskull>=1.0.0",
+        "packaging",
+        "python>=3.10",
+        "requests",
+        "ruamel.yaml",
     }
