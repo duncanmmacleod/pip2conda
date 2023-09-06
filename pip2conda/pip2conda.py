@@ -28,7 +28,7 @@ from build import (
     BuildException,
     ProjectBuilder,
 )
-from build.env import IsolatedEnvBuilder
+from build.env import DefaultIsolatedEnv
 
 from grayskull.strategy.pypi import PYPI_CONFIG
 from ruamel.yaml import YAML
@@ -177,11 +177,16 @@ def build_project_metadata(project_dir):
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
             metadir = builder.prepare("wheel", tmpdir)
-        except BuildBackendException:
+        except BuildBackendException as exc:
+            LOGGER.debug(f"preparing wheel failed: '{exc}'")
+            LOGGER.debug("building isolated environment...")
             # the backend is missing, so we need to
             # install it on-the-fly
-            with IsolatedEnvBuilder() as env:
-                builder.python_executable = env.executable
+            with DefaultIsolatedEnv() as env:
+                builder = ProjectBuilder.from_isolated_env(
+                    env,
+                    project_dir,
+                )
                 env.install(builder.build_system_requires)
                 metadir = builder.prepare("wheel", tmpdir)
         dist = PathDistribution(Path(metadir))
