@@ -41,6 +41,7 @@ dependencies = [
 	"requests",
 	"ruamel.yaml",
 	"packaging",
+	"wheel",
 ]
 
 # dynamic properties set by tools:
