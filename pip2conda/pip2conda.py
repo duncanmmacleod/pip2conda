@@ -38,10 +38,10 @@ yaml = YAML()
 
 # conda config
 CONDA = (
-    which("conda")
+    which("conda", mode=os.X_OK)
     or os.environ.get("CONDA_EXE", "conda")
 )
-CONDA_OR_MAMBA = which("mamba") or CONDA
+CONDA_OR_MAMBA = which("mamba", mode=os.X_OK) or CONDA
 
 # configure logging
 LOGGER = logging.getLogger(__name__.rsplit(".", 1)[-1])
