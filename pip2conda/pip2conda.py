@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -19,20 +18,16 @@ from pathlib import Path
 from shutil import which
 
 import requests
-
-from wheel.wheelfile import WheelFile
-
-from packaging.requirements import Requirement
-
 from build import (
     BuildBackendException,
     BuildException,
     ProjectBuilder,
 )
 from build.env import DefaultIsolatedEnv
-
 from grayskull.strategy.pypi import PYPI_CONFIG
+from packaging.requirements import Requirement
 from ruamel.yaml import YAML
+from wheel.wheelfile import WheelFile
 
 yaml = YAML()
 
@@ -67,7 +62,7 @@ def load_conda_forge_name_map():
     See https://github.com/conda-incubator/grayskull/blob/main/grayskull/pypi/config.yaml
     """  # noqa: E501
     # parse the config file and return (pypi_name: conda_forge_name) pairs
-    with open(PYPI_CONFIG, "r") as conf:
+    with open(PYPI_CONFIG) as conf:
         return {
             x: y["conda_forge"]
             for x, y in yaml.load(conf).items()
@@ -317,8 +312,8 @@ def parse_requirements(
 def parse_requirements_file(file, **kwargs):
     """Parse a requirements.txt-format file.
     """
-    if isinstance(file, (str, os.PathLike)):
-        with open(file, "r") as fileobj:
+    if isinstance(file, str | os.PathLike):
+        with open(file) as fileobj:
             yield from parse_requirements_file(fileobj, **kwargs)
             return
 

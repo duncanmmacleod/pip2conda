@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -12,10 +11,8 @@ from shutil import which
 from unittest import mock
 
 import pytest
-
-from build import BuildException
-
 import requests
+from build import BuildException
 
 from ..pip2conda import (
     main as pip2conda_main,
