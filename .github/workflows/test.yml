@@ -108,11 +108,11 @@ jobs:
     - name: Upload tarball
       uses: actions/upload-artifact@v4
       with:
-        name: tarball
+        name: sdist-${{ matrix.os }}-${{ matrix.python-version }}
         path: "*.tar.*"
 
     - name: Upload wheel(s)
       uses: actions/upload-artifact@v4
       with:
-        name: wheel
+        name: wheel-${{ matrix.os }}-${{ matrix.python-version }}
         path: "*.whl"
