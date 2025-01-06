@@ -260,6 +260,7 @@ setup()
             "--project-dir", str(tmp_path),
             "--output", str(out),
             "--all",
+            "--disable-mamba",
             "--verbose",
             "--verbose",
         ])
