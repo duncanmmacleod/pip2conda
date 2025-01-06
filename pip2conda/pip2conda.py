@@ -18,20 +18,16 @@ from pathlib import Path
 from shutil import which
 
 import requests
-
-from wheel.wheelfile import WheelFile
-
-from packaging.requirements import Requirement
-
 from build import (
     BuildBackendException,
     BuildException,
     ProjectBuilder,
 )
 from build.env import DefaultIsolatedEnv
-
 from grayskull.strategy.pypi import PYPI_CONFIG
+from packaging.requirements import Requirement
 from ruamel.yaml import YAML
+from wheel.wheelfile import WheelFile
 
 yaml = YAML()
 

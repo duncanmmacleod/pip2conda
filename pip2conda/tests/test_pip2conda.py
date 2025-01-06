@@ -11,10 +11,8 @@ from shutil import which
 from unittest import mock
 
 import pytest
-
-from build import BuildException
-
 import requests
+from build import BuildException
 
 from ..pip2conda import (
     main as pip2conda_main,
