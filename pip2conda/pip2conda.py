@@ -312,7 +312,7 @@ def parse_requirements(
 def parse_requirements_file(file, **kwargs):
     """Parse a requirements.txt-format file.
     """
-    if isinstance(file, (str, os.PathLike)):
+    if isinstance(file, str | os.PathLike):
         with open(file) as fileobj:
             yield from parse_requirements_file(fileobj, **kwargs)
             return
