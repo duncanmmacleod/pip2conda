@@ -363,10 +363,10 @@ def test_wheel(tmp_path, whl):
 
     # assert that we get what we should
     assert set(out.read_text().splitlines()) == {
-        "build",
         "grayskull>=1.0.0",
         "packaging",
         "python>=3.10",
+        "python-build",
         "requests",
         "ruamel.yaml",
     }
