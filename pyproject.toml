@@ -81,6 +81,35 @@ filterwarnings = [
   "ignore:.*pkg_resources",
 ]
 
+[tool.ruff.lint]
+preview = true
+select = [
+  # pycodestyle errors
+  "E",
+  # flake8-executable
+  "EXE",
+  # pyflakes
+  "F",
+  # isort
+  "I",
+  # pep8-naming
+  "N",
+  # pyupgrade
+  "UP",
+  # pycodestyle warnings
+  "W",
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-wrap-aliases = true
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+  "F401",  # unused-import
+  "F403",  # undefined-local-with-import-star
+]
+
 [tool.setuptools]
 license-files = [
   "LICENSE",
