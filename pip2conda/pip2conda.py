@@ -41,7 +41,6 @@ CONDA = (
     which("conda", mode=os.X_OK)
     or os.environ.get("CONDA_EXE", "conda")
 )
-CONDA_OR_MAMBA = which("mamba", mode=os.X_OK) or CONDA
 
 # configure logging
 LOGGER = logging.getLogger(__name__.rsplit(".", 1)[-1])
@@ -442,18 +441,17 @@ def parse_all_requirements(
 
 # -- conda ------------------
 
-def find_packages(requirements, use_mamba=True):
-    """Run conda/mamba to resolve an environment
+def find_packages(requirements, conda=CONDA):
+    """Run conda/mamba to resolve an environment.
 
     This does not actually create an environment, but is called so
     that if it fails because packages are missing, they can be
     identified.
     """
     prefix = tempfile.mktemp(prefix=Path(__file__).stem)
-    EXE = CONDA_OR_MAMBA if use_mamba else CONDA
-    use_mamba = "mamba" in os.path.basename(EXE)
+    conda = str(conda)
     cmd = [
-        EXE,
+        str(conda),
         "create",  # solve for a new environment
         "--dry-run",  # don't actually do anything but solve
         "--json",  # print JSON-format output
@@ -466,7 +464,7 @@ def find_packages(requirements, use_mamba=True):
 
     # Windows (batch?) does weird things with angle brackets,
     # so we need to escape them in a weird way
-    if EXE.lower().endswith(".bat"):
+    if conda.lower().endswith(".bat"):
         cmd = [arg.replace(">", "^^^>") for arg in cmd]
 
     LOGGER.debug(f"$ {shlex.join(cmd)}")
@@ -478,48 +476,36 @@ def find_packages(requirements, use_mamba=True):
     )
 
     if pfind.returncode:
-        # search failed; if we can't use the output to parse missing
-        # packages because we're using mamba, we need to try again
-        # with conda, which definitely outputs json...
-        try:
-            json.loads(pfind.stdout)
-        except json.JSONDecodeError:
-            if not use_mamba:
-                raise
-            LOGGER.debug(
-                "mamba search failed and didn't report JSON:\n"
-                f"{pfind.stdout}".rstrip()
-            )
-            LOGGER.debug("trying again with conda")
-            return find_packages(requirements, use_mamba=False)
+        json.loads(pfind.stdout)
 
     return pfind
 
 
-def filter_requirements(requirements, use_mamba=True):
-    """Filter requirements by running conda/mamba to see what is missing
+def filter_requirements(requirements, conda=CONDA):
+    """Filter requirements by running conda/mamba to see what is missing.
     """
     requirements = set(requirements)
 
     # find all packages with conda
-    LOGGER.info("Finding packages with conda/mamba")
-    pfind = find_packages(requirements, use_mamba=use_mamba)
+    exe = os.path.basename(conda)
+    LOGGER.info(f"Finding packages with {exe}")
+    pfind = find_packages(requirements, conda=conda)
 
     if pfind.returncode:  # something went wrong
         # parse the JSON report
         report = json.loads(pfind.stdout)
 
         # report isn't a simple 'missing package' error
-        if report["exception_name"] != "PackagesNotFoundError":
+        if report.get("exception_name", None) != "PackagesNotFoundError":
             LOGGER.critical("\n".join((
-                "conda/mamba failed to resolve packages:",
-                report["error"],
+                f"{exe} failed to resolve packages:",
+                report.get("error", report.get("solver_problems", "unknown")),
             )))
             pfind.check_returncode()  # raises exception
 
         # one or more packages are missing
         LOGGER.warning(
-            "conda/mamba failed to find some packages, "
+            f"{exe} failed to find some packages, "
             "attempting to parse what's missing",
         )
         missing = {
@@ -558,13 +544,13 @@ def write_yaml(path, packages):
 # -- pip2conda main func ----
 
 def pip2conda(
-        project,
-        python_version=None,
-        extras=[],
-        requirements_files=[],
-        skip_build_requires=False,
-        skip_conda_forge_check=False,
-        use_mamba=True,
+    project,
+    python_version=None,
+    extras=[],
+    requirements_files=[],
+    skip_build_requires=False,
+    skip_conda_forge_check=False,
+    conda=CONDA,
 ):
     # parse requirements
     requirements = parse_all_requirements(
@@ -581,7 +567,7 @@ def pip2conda(
     # filter out requirements that aren't available in conda-forge
     return filter_requirements(
         requirements,
-        use_mamba=use_mamba,
+        conda=conda,
     )
 
 
@@ -655,11 +641,11 @@ def create_parser():
         ),
     )
     parser.add_argument(
-        "-M",
-        "--disable-mamba",
-        action="store_true",
-        default=False,
-        help="don't use mamba, even if it is available",
+        "-C",
+        "--conda",
+        default=CONDA,
+        type=Path,
+        help="Conda/mamba executable to call",
     )
     parser.add_argument(
         "-s",
@@ -687,11 +673,6 @@ def main(args=None):
     # set verbose logging
     LOGGER.setLevel(max(3 - args.verbose, 0) * 10)
 
-    # show what conda/mamba we found
-    LOGGER.debug(f"found conda in {CONDA}")
-    if CONDA_OR_MAMBA != CONDA and not args.disable_mamba:
-        LOGGER.debug(f"found mamba in {CONDA_OR_MAMBA}")
-
     # run the thing
     requirements = sorted(pip2conda(
         args.project,
@@ -700,7 +681,7 @@ def main(args=None):
         requirements_files=args.requirements,
         skip_build_requires=args.no_build_requires,
         skip_conda_forge_check=args.skip_conda_forge_check,
-        use_mamba=not args.disable_mamba,
+        conda=args.conda,
     ))
     LOGGER.info("Package finding complete")
 
