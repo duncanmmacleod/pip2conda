@@ -54,11 +54,8 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: test
-        miniforge-variant: Mambaforge
+        miniforge-version: latest
         python-version: ${{ matrix.python-version }}
-        use-mamba: true
-        # this is needed for caching to work properly:
-        use-only-tar-bz2: true
 
     - name: Conda info
       run: conda info --all
@@ -66,12 +63,12 @@ jobs:
     - name: Create distributions
       run: |
         # create isolated environment for build
-        mamba create -n build --quiet --yes \
+        conda create -n build --quiet --yes \
             python=${{ matrix.python-version }} \
             python-build \
         ;
         # create distributions
-        mamba run -n build python -m build . --sdist --wheel --outdir .
+        conda run -n build python -m build . --sdist --wheel --outdir .
 
     - name: Install this project with test extras
       run: |
