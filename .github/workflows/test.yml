@@ -96,7 +96,7 @@ jobs:
       run: python -m coverage xml
 
     - name: Publish coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: ./coverage.xml
         flags: ${{ runner.os }},python${{ matrix.python-version }}
