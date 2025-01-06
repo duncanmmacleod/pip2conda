@@ -2,9 +2,9 @@
 
 [build-system]
 requires = [
-    "setuptools>=61.0",
-    "setuptools_scm>=3.4.3",
-    "wheel",
+  "setuptools>=61.0",
+  "setuptools_scm>=3.4.3",
+  "wheel",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -15,51 +15,51 @@ name = "pip2conda"
 description = "Translate pip requirements into conda requirements"
 readme = "README.md"
 authors = [
-	{ name = "Duncan Macleod", email = "duncanmmacleod@gmail.com" },
+  { name = "Duncan Macleod", email = "duncanmmacleod@gmail.com" },
 ]
 license = { text = "GPL-3.0-or-later" }
 classifiers = [
-	"Development Status :: 4 - Beta",
-	"Intended Audience :: Developers",
-	"License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
-	"Natural Language :: English",
-	"Operating System :: OS Independent",
-	"Programming Language :: Python",
-	"Programming Language :: Python :: 3",
-	"Programming Language :: Python :: 3.10",
-	"Programming Language :: Python :: 3.11",
-	"Programming Language :: Python :: 3.12",
-	"Programming Language :: Python :: 3.13",
-	"Topic :: Software Development",
-	"Topic :: Software Development :: Build Tools",
-	"Topic :: Software Development :: Testing",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Natural Language :: English",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Software Development :: Testing",
 ]
 
 # requirements:
 requires-python = ">=3.10"
 dependencies = [
-	"build >= 1.0.0",
-	"grayskull >=1.0.0",
-	"requests",
-	"ruamel.yaml",
-	"packaging",
-	"wheel",
+  "build >= 1.0.0",
+  "grayskull >=1.0.0",
+  "requests",
+  "ruamel.yaml",
+  "packaging",
+  "wheel",
 ]
 
 # dynamic properties set by tools:
 dynamic = [
-	"version",
+  "version",
 ]
 
 [project.optional-dependencies]
 test = [
-	"pytest",
-	"pytest-cov",
+  "pytest",
+  "pytest-cov",
 ]
 docs = [
-	"myst-parser",
-	"sphinx",
-	"sphinx_rtd_theme",
+  "myst-parser",
+  "sphinx",
+  "sphinx_rtd_theme",
 ]
 
 [project.scripts]
@@ -73,9 +73,17 @@ pip2conda = "pip2conda.pip2conda:main"
 
 # -- tools --------
 
+[tool.pytest.ini_options]
+addopts = "-r a"
+filterwarnings = [
+  "error",
+  "ignore:Support for::setuptools",
+  "ignore:.*pkg_resources",
+]
+
 [tool.setuptools]
 license-files = [
-	"LICENSE",
+  "LICENSE",
 ]
 
 [tool.setuptools.packages.find]
@@ -83,16 +91,8 @@ license-files = [
 #       someone is creating a temporary directory that setuptools
 #       discovers as a nother top-level package
 include = [
-	"pip2conda*",
+  "pip2conda*",
 ]
 
 [tool.setuptools_scm]
 write_to = "pip2conda/_version.py"
-
-[tool.pytest.ini_options]
-addopts = "-r a"
-filterwarnings = [
-	"error",
-	"ignore:Support for::setuptools",
-	"ignore:.*pkg_resources",
-]
