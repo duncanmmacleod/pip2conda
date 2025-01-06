@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from importlib.metadata import PathDistribution
@@ -461,14 +462,14 @@ def find_packages(requirements, use_mamba=True):
         "--override-channels",  # ignore user's conda config
         "--channel", "conda-forge",  # only look at conda-forge
         "--prefix", prefix,  # don't overwrite existing env by mistake!
-    ]
+    ] + sorted(requirements)
 
-    # we use weird quoting here so that when the command is printed
-    # to the log, PowerShell users can copy it and run it verbatim
-    # without ps seeing '>' and piping output
-    cmd.extend((f'"""{req}"""' for req in requirements))
+    # Windows (batch?) does weird things with angle brackets,
+    # so we need to escape them in a weird way
+    if EXE.lower().endswith(".bat"):
+        cmd = [arg.replace(">", "^^^>") for arg in cmd]
 
-    LOGGER.debug(f"$ {' '.join(cmd)}")
+    LOGGER.debug(f"$ {shlex.join(cmd)}")
     pfind = subprocess.run(
         cmd,
         check=False,

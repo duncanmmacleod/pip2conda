@@ -11,13 +11,13 @@ on:
   push:
     branches:
       - main
-      - master
       - release/**
   pull_request:
     branches:
       - main
-      - master
       - release/**
+  schedule:
+    - cron: "0 0 * * *"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,19 +46,16 @@ jobs:
 
     steps:
     - name: Get source code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Configure conda
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: test
-        miniforge-variant: Mambaforge
+        miniforge-version: latest
         python-version: ${{ matrix.python-version }}
-        use-mamba: true
-        # this is needed for caching to work properly:
-        use-only-tar-bz2: true
 
     - name: Conda info
       run: conda info --all
@@ -66,12 +63,12 @@ jobs:
     - name: Create distributions
       run: |
         # create isolated environment for build
-        mamba create -n build --quiet --yes \
+        conda create -n build --quiet --yes \
             python=${{ matrix.python-version }} \
             python-build \
         ;
         # create distributions
-        mamba run -n build python -m build . --sdist --wheel --outdir .
+        conda run -n build python -m build . --sdist --wheel --outdir .
 
     - name: Install this project with test extras
       run: |
@@ -96,26 +93,26 @@ jobs:
       run: python -m coverage xml
 
     - name: Publish coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         files: ./coverage.xml
         flags: ${{ runner.os }},python${{ matrix.python-version }}
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: pytest-${{ matrix.os }}-${{ matrix.python-version }}
         path: pytest.xml
 
     - name: Upload tarball
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
-        name: tarball
+        name: sdist-${{ matrix.os }}-${{ matrix.python-version }}
         path: "*.tar.*"
 
     - name: Upload wheel(s)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
-        name: wheel
+        name: wheel-${{ matrix.os }}-${{ matrix.python-version }}
         path: "*.whl"
