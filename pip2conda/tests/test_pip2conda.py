@@ -157,11 +157,7 @@ install_requires =
             "--python-version", "9.9",
             "--project-dir", str(tmp_path),
             "--output", str(out),
-            "--disable-mamba",
         ])
-
-        # validate that --disable-mamba worked
-        _run.assert_called_once()
 
     # validate the result
     assert out.read_text().splitlines() == [
@@ -260,7 +256,6 @@ setup()
             "--project-dir", str(tmp_path),
             "--output", str(out),
             "--all",
-            "--disable-mamba",
             "--verbose",
             "--verbose",
         ])
