@@ -51,7 +51,7 @@ jobs:
         fetch-depth: 0
 
     - name: Configure conda
-      uses: conda-incubator/setup-miniconda@v2
+      uses: conda-incubator/setup-miniconda@v3
       with:
         activate-environment: test
         miniforge-variant: Mambaforge
