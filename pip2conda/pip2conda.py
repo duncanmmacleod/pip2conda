@@ -457,12 +457,16 @@ def find_packages(requirements, conda=CONDA):
         "--prefix", prefix,  # don't overwrite existing env by mistake!
     ] + sorted(requirements)
 
-    # Windows (batch?) does weird things with angle brackets,
-    # so we need to escape them in a weird way
     if conda.lower().endswith(".bat"):
-        cmd = [arg.replace(">", "^^^>") for arg in cmd]
+        # Windows (batch?) does weird things with angle brackets,
+        # so we need to escape them in a weird way
+        cmd = [re.sub("([><])", r"^^^\1", arg) for arg in cmd]
+        # remove quotes from batch script name, powershell doesn't understand
+        cmdstr = str(conda) + " " + shlex.join(cmd[1:])
+    else:
+        cmdstr = shlex.join(cmd)
 
-    LOGGER.debug(f"$ {shlex.join(cmd)}")
+    LOGGER.debug(f"$ {cmdstr}")
     pfind = subprocess.run(
         cmd,
         check=False,
@@ -482,7 +486,7 @@ def filter_requirements(requirements, conda=CONDA):
     requirements = set(requirements)
 
     # find all packages with conda
-    exe = os.path.basename(conda)
+    exe = Path(conda).stem
     LOGGER.info(f"Finding packages with {exe}")
     pfind = find_packages(requirements, conda=conda)
 
