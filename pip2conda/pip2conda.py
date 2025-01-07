@@ -1,7 +1,7 @@
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Parse setup.cfg for package requirements and print out a list of
+"""Parse a Python project for package requirements and print out a list of
 packages that can be installed using conda from the conda-forge channel.
 """
 
