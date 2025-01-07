@@ -74,7 +74,7 @@ def format_requirement(requirement, conda_forge_map=dict()):
 
     Parameters
     ----------
-    requirement : `pkg_resources.Requirement`
+    requirement : `packaging.requirements.Requirement`
         the requirement to format
 
     conda_forge_map : `dict`
@@ -87,8 +87,8 @@ def format_requirement(requirement, conda_forge_map=dict()):
 
     Examples
     --------
-    >>> import pkg_resources
-    >>> req = pkg_resources.Requirement.parse("htcondor >= 9.0.0")
+    >>> import packaging.requirements
+    >>> req = packaging.requirements.Requirement.parse("htcondor >= 9.0.0")
     >>> print(format_requirement(req))
     'python-htcondor>=9.0.0'
     """
@@ -208,7 +208,7 @@ def parse_req_extras(req, environment=None, conda_forge_map=dict()):
 
     Parameters
     ----------
-    req : `pkg_resources.Requirement`
+    req : `packaging.requirements.Requirement`
         the requirement to format
 
     conda_forge_map : `dict`
@@ -280,7 +280,7 @@ def parse_requirements(
 
     Yields
     ------
-    spec : `pkg_resources.Requirement`
+    spec : `packaging.requirements.Requirement`
         a formatted requirement for each line
     """
     for entry in requirements:
