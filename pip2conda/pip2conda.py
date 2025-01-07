@@ -1,7 +1,7 @@
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Parse setup.cfg for package requirements and print out a list of
+"""Parse a Python project for package requirements and print out a list of
 packages that can be installed using conda from the conda-forge channel.
 """
 
@@ -70,32 +70,40 @@ def load_conda_forge_name_map():
 
 
 def format_requirement(requirement, conda_forge_map=dict()):
-    """Format a (pip) Requirement as a conda dependency
+    """Format a (pip) Requirement as a conda dependency.
+
+    Complicated specifiers (with multiple conditions) are separated into
+    individual requirements which are yielded individually.
 
     Parameters
     ----------
-    requirement : `pkg_resources.Requirement`
-        the requirement to format
+    requirement : `packaging.requirements.Requirement`
+        The requirement to format.
 
     conda_forge_map : `dict`
-        `(pypi_name, conda_forge_name)` mapping dictionary
+        `(pypi_name, conda_forge_name)` mapping dictionary.
 
-    Returns
+    Yields
     -------
     formatted : `str`
-        the formatted conda requirement
+        A formatted conda requirement.
 
     Examples
     --------
-    >>> import pkg_resources
-    >>> req = pkg_resources.Requirement.parse("htcondor >= 9.0.0")
-    >>> print(format_requirement(req))
-    'python-htcondor>=9.0.0'
+    >>> import packaging.requirements
+    >>> req = packaging.requirements.Requirement.parse("htcondor >= 9.0.0")
+    >>> print(list(format_requirement(req)))
+    ['python-htcondor>=9.0.0']
+    >>> req = packaging.requirements.Requirement.parse("python-framel>=8.40.1,!=8.46.0")
+    >>> print(list(format_requirement(req)))
+    ['python-framel!=8.46.0', 'python-framel>=8.40.1']
     """
-    return (
-        conda_forge_map.get(requirement.name, requirement.name.lower())
-        + str(requirement.specifier)
-    ).strip()
+    name = conda_forge_map.get(requirement.name, requirement.name.lower())
+    if requirement.specifier:
+        for spec in requirement.specifier:
+            yield name + str(spec)
+    else:
+        yield name
 
 
 # -- python metadata parsing
@@ -208,7 +216,7 @@ def parse_req_extras(req, environment=None, conda_forge_map=dict()):
 
     Parameters
     ----------
-    req : `pkg_resources.Requirement`
+    req : `packaging.requirements.Requirement`
         the requirement to format
 
     conda_forge_map : `dict`
@@ -280,7 +288,7 @@ def parse_requirements(
 
     Yields
     ------
-    spec : `pkg_resources.Requirement`
+    spec : `packaging.requirements.Requirement`
         a formatted requirement for each line
     """
     for entry in requirements:
@@ -304,7 +312,10 @@ def parse_requirements(
             conda_forge_map=conda_forge_map,
         )
         # format as 'name{>=version}'
-        yield format_requirement(req, conda_forge_map=conda_forge_map)
+        yield from format_requirement(
+            req,
+            conda_forge_map=conda_forge_map,
+        )
 
 
 # -- requirements.txt -------
@@ -395,8 +406,8 @@ def parse_all_requirements(
     if python_version:
         LOGGER.info(f"Using Python {python_version}")
         if not python_version.startswith((">", "<", "=")):
-            python_version = f"={python_version}.*"
-        yield f"python{python_version}"
+            python_version = f"=={python_version}.*"
+        yield from format_requirement(Requirement(f"python{python_version}"))
 
     # then build requirements
     if not skip_build_requires:

@@ -161,7 +161,7 @@ install_requires =
         "a",
         "c>=2.0",
         "e>=2.0",
-        "python=9.9.*",
+        "python==9.9.*",
     ]
 
 
@@ -207,7 +207,7 @@ test = [
         "numpy>=1.20.0",
         "pytest",
         "pytest-cov>=2.0.0",
-        "python=3.11.*",
+        "python==3.11.*",
         "scipy",
         "setuptools",
     }
@@ -339,7 +339,8 @@ test = [ "pytest" ]
         "h5py>=2.10.0",
         "poetry-core>=1.0.0",
         "pytest",
-        "python>=3.10,<4.0",
+        "python>=3.10",
+        "python<4.0",
     }
 
 
