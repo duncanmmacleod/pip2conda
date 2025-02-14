@@ -478,17 +478,12 @@ def find_packages(requirements, conda=CONDA):
         cmdstr = shlex.join(cmd)
 
     LOGGER.debug(f"$ {cmdstr}")
-    pfind = subprocess.run(
+    return subprocess.run(
         cmd,
         check=False,
         stdout=subprocess.PIPE,
         text=True,
     )
-
-    if pfind.returncode:
-        json.loads(pfind.stdout)
-
-    return pfind
 
 
 def filter_requirements(requirements, conda=CONDA):
