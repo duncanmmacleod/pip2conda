@@ -501,6 +501,8 @@ def filter_requirements(requirements, conda=CONDA):
     LOGGER.info(f"Finding packages with {exe}")
     pfind = find_packages(requirements, conda=conda)
 
+    if pfind.returncode < 0:  # killed with signal
+        return pfind.check_returncode()  # raises
     if pfind.returncode:  # something went wrong
         # parse the JSON report
         report = json.loads(pfind.stdout)
