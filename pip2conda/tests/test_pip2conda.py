@@ -264,7 +264,7 @@ setup()
     expected = {
         "gwpy==2.1.3",
         "igwn-auth-utils==0.2.2",
-        "safe-netrc>=1.0.0",
+        "safe-netrc>=1.0",
         "setuptools==62.1.0",
     }
     assert expected.issubset(result)
