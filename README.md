@@ -52,3 +52,12 @@ setuptools-scm>=3.4.3
 setuptools>=61.0
 wheel
 ```
+
+## Converting requirements.txt
+
+To convert an existing `requirements.txt` file into a conda environment.txt file,
+use the `-r/--requirements` option:
+
+```shell
+pip2conda -r ./requirements.txt
+```
