@@ -29,6 +29,13 @@ from packaging.requirements import Requirement
 from ruamel.yaml import YAML
 from wheel.wheelfile import WheelFile
 
+try:
+    from coloredlogs import ColoredFormatter as Formatter
+except ImportError:
+    Formatter = logging.Formatter
+
+log = logging.getLogger(__package__)
+
 yaml = YAML()
 
 # conda config
@@ -38,17 +45,6 @@ CONDA = (
 )
 
 # configure logging
-LOGGER = logging.getLogger(__name__.rsplit(".", 1)[-1])
-try:
-    from coloredlogs import ColoredFormatter as _Formatter
-except ImportError:
-    _Formatter = logging.Formatter
-if not LOGGER.hasHandlers():
-    _LOG_HANDLER = logging.StreamHandler()
-    _LOG_HANDLER.setFormatter(_Formatter(
-        fmt="[%(asctime)s] %(levelname)+8s: %(message)s",
-    ))
-    LOGGER.addHandler(_LOG_HANDLER)
 
 # regex to match version spec characters
 VERSION_OPERATOR = re.compile("[><=!]")
@@ -173,7 +169,7 @@ def build_project_metadata(project_dir):
         The package metadata as parsed by
         `importlib.metadata.Distribution.metadata.json`.
     """
-    LOGGER.info(f"building metadata for {project_dir}")
+    log.info("building metadata for %s", project_dir)
 
     # use python-build to generate the build metadata
     builder = ProjectBuilder(project_dir)
@@ -181,8 +177,8 @@ def build_project_metadata(project_dir):
         try:
             metadir = builder.prepare("wheel", tmpdir)
         except BuildBackendException as exc:
-            LOGGER.debug(f"preparing wheel failed: '{exc}'")
-            LOGGER.debug("building isolated environment...")
+            log.debug("preparing wheel failed: '%s'", str(exc))
+            log.debug("building isolated environment...")
             # the backend is missing, so we need to
             # install it on-the-fly
             with DefaultIsolatedEnv() as env:
@@ -293,7 +289,7 @@ def parse_requirements(
     """
     for entry in requirements:
         if not depth:  # print top-level requirements
-            LOGGER.debug(f"  parsing {entry}")
+            log.debug("  parsing %s", entry)
         req = Requirement(entry)
         # if environment markers don't pass, skip
         if not _evaluate_marker(
@@ -404,24 +400,24 @@ def parse_all_requirements(
     elif "requires_python" in meta:
         python_version = meta["requires_python"]
     if python_version:
-        LOGGER.info(f"Using Python {python_version}")
+        log.info("Using Python %s", python_version)
         if not python_version.startswith((">", "<", "=")):
             python_version = f"=={python_version}.*"
         yield from format_requirement(Requirement(f"python{python_version}"))
 
     # then build requirements
     if not skip_build_requires:
-        LOGGER.info("Processing build-system/requires")
+        log.info("Processing build-system/requires")
         for req in parse_requirements(
             meta.get("build_system_requires", []),
             environment=environment,
             conda_forge_map=conda_forge_map,
         ):
-            LOGGER.debug(f"    parsed {req}")
+            log.debug("    parsed %s", req)
             yield req
 
     # then runtime requirements
-    LOGGER.info("Processing requires_dist")
+    log.info("Processing requires_dist")
     if extras == "ALL":
         extras = meta["provides_extra"]
     for req in parse_requirements(
@@ -430,18 +426,18 @@ def parse_all_requirements(
         extras=extras,
         conda_forge_map=conda_forge_map,
     ):
-        LOGGER.debug(f"    parsed {req}")
+        log.debug("    parsed %s", req)
         yield req
 
     # then requirements.txt files
     for reqfile in requirements_files:
-        LOGGER.info(f"Processing {reqfile}")
+        log.info("Processing %s", reqfile)
         for req in parse_requirements_file(
             reqfile,
             environment=environment,
             conda_forge_map=conda_forge_map,
         ):
-            LOGGER.debug(f"    parsed {req}")
+            log.debug("    parsed %s", req)
             yield req
 
 
@@ -477,7 +473,7 @@ def find_packages(requirements, conda=CONDA):
     else:
         cmdstr = shlex.join(cmd)
 
-    LOGGER.debug(f"$ {cmdstr}")
+    log.debug("$ %s", cmdstr)
     return subprocess.run(
         cmd,
         check=False,
@@ -493,7 +489,7 @@ def filter_requirements(requirements, conda=CONDA):
 
     # find all packages with conda
     exe = Path(conda).stem
-    LOGGER.info(f"Finding packages with {exe}")
+    log.info("Finding packages with %s", exe)
     pfind = find_packages(requirements, conda=conda)
 
     if pfind.returncode < 0:  # killed with signal
@@ -504,16 +500,17 @@ def filter_requirements(requirements, conda=CONDA):
 
         # report isn't a simple 'missing package' error
         if report.get("exception_name", None) != "PackagesNotFoundError":
-            LOGGER.critical("\n".join((
+            log.critical("\n".join((
                 f"{exe} failed to resolve packages:",
                 report.get("error", report.get("solver_problems", "unknown")),
             )))
             pfind.check_returncode()  # raises exception
 
         # one or more packages are missing
-        LOGGER.warning(
-            f"{exe} failed to find some packages, "
+        log.warning(
+            "%s failed to find some packages, "
             "attempting to parse what's missing",
+            exe,
         )
         missing = {
             pkg.split("[", 1)[0].lower()  # strip out build info
@@ -529,7 +526,7 @@ def filter_requirements(requirements, conda=CONDA):
                 VERSION_OPERATOR.split(req)[0].strip().lower(),
             }
             if guesses & missing:  # package is missing
-                LOGGER.warning(f"  removing {req!r}")
+                log.warning("  removing '%s'", req)
                 requirements.remove(req)
 
     return requirements
@@ -677,8 +674,16 @@ def main(args=None):
     parser = create_parser()
     args = parser.parse_args(args=args)
 
-    # set verbose logging
-    LOGGER.setLevel(max(3 - args.verbose, 0) * 10)
+    # configure logging
+    root_logger = logging.getLogger()
+    if not root_logger.hasHandlers():
+        handler = logging.StreamHandler()
+        handler.setFormatter(Formatter(
+            fmt="%(asctime)s:%(name)s[%(process)d]:%(levelname)+8s: %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
+        ))
+        root_logger.addHandler(handler)
+        root_logger.setLevel(max(3 - args.verbose, 0) * 10)
 
     # run the thing
     requirements = sorted(pip2conda(
@@ -690,7 +695,7 @@ def main(args=None):
         skip_conda_forge_check=args.skip_conda_forge_check,
         conda=args.conda,
     ))
-    LOGGER.info("Package finding complete")
+    log.info("Package finding complete")
 
     # print output to file or stdout
     out = "\n".join(requirements)
