@@ -20,6 +20,7 @@ $[[ inputs.job_name ]]:
   extends:
     - .uv
   stage: $[[ inputs.stage ]]
+  needs: []
   script:
     # build distributions
     - uv build -o .
