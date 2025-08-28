@@ -16,6 +16,12 @@ spec:
 include:
   - local: .gitlab/ci/uv.yml
 
+  - component: gitlab.com/components/dependency-scanning/main@~latest
+    inputs:
+      job_name: dependency-scanning
+      stage: $[[ inputs.stage ]]
+      allow_failure: true
+
   - component: gitlab.com/components/sast/sast@f6a5077c4ebd85a087ea0a15ab2113d52ef8e77e
     inputs:
       enable_mr_pipelines: $[[ inputs.enable_mr_pipelines ]]
@@ -24,6 +30,18 @@ include:
 
 .sast-analyzer:
   needs: []
+
+uv-lock:
+  extends: .uv
+  stage: .pre
+  script:
+    - uv lock --resolution lowest-direct
+  artifacts:
+    paths:
+      - uv.lock
+
+dependency-scanning:
+  needs: [uv-lock]
 
 ruff:
   stage: $[[ inputs.stage ]]
