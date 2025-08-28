@@ -66,10 +66,10 @@ docs = [
 pip2conda = "pip2conda.pip2conda:main"
 
 [project.urls]
-"Bug Tracker" = "https://github.com/duncanmmacleod/pip2conda/issues"
+"Bug Tracker" = "https://gitlab.com/gwpy/pip2conda/-/issues"
 "Documentation" = "https://pip2conda.readthedocs.io"
-"Homepage" = "https://github.com/duncanmmacleod/pip2conda/"
-"Source Code" = "https://github.com/duncanmmacleod/pip2conda.git"
+"Homepage" = "https://gitlab.com/gwpy/pip2conda/"
+"Source Code" = "https://gitlab.com/gwpy/pip2conda.git"
 
 # -- tools --------
 

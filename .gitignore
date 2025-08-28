@@ -20,6 +20,7 @@ pip2conda/_version.py
 *.swp
 .DS_Store
 .idea
+.vscode
 
 # Patches
 *.patch

@@ -1,0 +1,36 @@
+# -- Quality Assurance
+
+spec:
+  inputs:
+    stage:
+      default: test
+      description: The stage in which to run the job
+      type: string
+    enable_mr_pipelines:
+      default: true
+      description: Whether to enable merge request pipelines
+      type: boolean
+
+---
+
+include:
+  - local: .gitlab/ci/uv.yml
+
+  - component: gitlab.com/components/sast/sast@~latest
+    inputs:
+      enable_mr_pipelines: $[[ inputs.enable_mr_pipelines ]]
+      run_advanced_sast: true
+      stage: $[[ inputs.stage ]]
+
+.sast-analyzer:
+  needs: []
+
+ruff:
+  stage: $[[ inputs.stage ]]
+  image: ghcr.io/astral-sh/ruff:0.12.10-alpine
+  script:
+    - ruff check . --exit-zero
+    - ruff check . --exit-zero --output-format gitlab --output-file gl-ruff.json
+  artifacts:
+    reports:
+      codequality: gl-ruff.json

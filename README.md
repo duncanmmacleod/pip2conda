@@ -12,12 +12,10 @@ into a conda-forge requirement suitable for installation with `conda/mamba`.
 [![Conda version](https://img.shields.io/conda/vn/conda-forge/pip2conda.svg)](https://anaconda.org/conda-forge/pip2conda/)
 [![License](https://img.shields.io/pypi/l/pip2conda.svg)](https://choosealicense.com/licenses/gpl-3.0/)
 ![Supported Python versions](https://img.shields.io/pypi/pyversions/pip2conda.svg)
-[![DOI](https://zenodo.org/badge/454433504.svg)](https://zenodo.org/badge/latestdoi/454433504)
 
-[![Build status](https://github.com/duncanmmacleod/pip2conda/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/duncanmmacleod/pip2conda/actions/workflows/test.yml)
+[![Build status](https://gitlab.com/gwpy/pip2conda/badges/main/pipeline.svg)](https://gitlab.com/gwpy/pip2conda/-/pipelines/)
 [![Documentation status](https://readthedocs.org/projects/pip2conda/badge/?version=latest)](https://pip2conda.readthedocs.io/en/latest/?badge=latest)
-[![Coverage status](https://codecov.io/gh/duncanmmacleod/pip2conda/branch/main/graph/badge.svg)](https://codecov.io/gh/duncanmmacleod/pip2conda)
-[![Maintainability](https://api.codeclimate.com/v1/badges/767d8f5a2468fabb583b/maintainability)](https://codeclimate.com/github/duncanmmacleod/pip2conda/maintainability)
+[![Coverage status](https://gitlab.com/gwpy/pip2conda/badges/main/coverage.svg)](https://gitlab.com/gwpy/pip2conda)
 
 ## Installation
 

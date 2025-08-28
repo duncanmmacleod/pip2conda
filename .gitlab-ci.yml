@@ -1,0 +1,44 @@
+# -- pip2conda GitLab CI/CD pipeline
+
+spec:
+  inputs:
+    publish:
+      default: true
+      description: Whether to publish to PyPI on tags
+      type: boolean
+
+---
+
+workflow:
+  rules:
+    # run for merge requests
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # don't run on branches if there's an open merge request
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # run on branches and tags
+    - if: $CI_COMMIT_BRANCH || $CI_COMMIT_TAG
+
+stages:
+  - build
+  - test
+  - deploy
+
+default:
+  interruptible: true
+
+include:
+  - local: .gitlab/ci/qa.yml
+  - local: .gitlab/ci/build.yml
+    inputs:
+      job_name: &build_job_name build
+  - local: .gitlab/ci/test.yml
+    inputs:
+      needs:
+        - *build_job_name
+  - local: .gitlab/ci/twine.yml
+    inputs:
+      dependencies:
+        - *build_job_name
+    rules:
+      - if: '"$[[ inputs.publish ]]" == "true"'
