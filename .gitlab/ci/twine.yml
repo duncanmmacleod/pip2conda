@@ -1,0 +1,54 @@
+# -- Publish
+
+spec:
+  inputs:
+    stage:
+      default: deploy
+      description: "Pipeline stage in which to add jobs"
+      type: string
+    dependencies:
+      description: "List of jobs from which to deploy"
+      type: array
+
+---
+
+include:
+  - local: .gitlab/ci/uv.yml
+
+twine:
+  extends:
+    - .uv
+  interruptible: false
+  rules:
+    # Only for tags
+    - if: $CI_COMMIT_TAG
+  stage: $[[ inputs.stage ]]
+  dependencies: $[[ inputs.dependencies ]]
+  environment:
+    name: $PYPI_REPOSITORY
+    url: https://$PYPI_HOSTNAME/project/$CI_PROJECT_NAME
+    deployment_tier: production
+  id_tokens:
+    PYPI_ID_TOKEN:
+      aud: $PYPI_REPOSITORY
+  variables:
+    GIT_STRATEGY: none
+    # PyPI server target
+    PYPI_REPOSITORY: "pypi"
+    PYPI_HOSTNAME: "pypi.org"
+  script:
+    # set up virtualenv
+    - uv venv
+    - . .venv/bin/activate
+    - uv pip install id twine
+    # check files
+    - python -m twine check *.tar.* *.whl
+    # get API token
+    - oidc_token=$(python -m id pypi)
+    - resp=$(curl -X POST https://${PYPI_HOSTNAME}/_/oidc/mint-token -d "{\"token\":\"${oidc_token}\"}")
+    - api_token=$(python -c "import json,sys; data = json.load(sys.stdin); print(data['token'])" <<< "${resp}")
+    # upload
+    - uv publish
+        --token "${api_token}"
+        *.tar.*
+        *.whl

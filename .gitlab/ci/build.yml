@@ -1,0 +1,32 @@
+# -- Build distributions
+
+spec:
+  inputs:
+    job_name:
+      default: build
+      description: "Name to give this job"
+      type: string
+    stage: 
+      default: build
+      description: "Pipeline stage in which to add jobs"
+      type: string
+
+---
+
+include:
+  local: .gitlab/ci/uv.yml
+
+$[[ inputs.job_name ]]:
+  extends:
+    - .uv
+  stage: $[[ inputs.stage ]]
+  script:
+    # build distributions
+    - uv build -o .
+    # inspect
+    - uv run --no-project -m tarfile --list *.tar.*
+    - uv run --no-project -m zipfile --list *.whl
+  artifacts:
+    paths:
+      - "*.tar.*"
+      - "*.whl"

@@ -66,12 +66,35 @@ docs = [
 pip2conda = "pip2conda.pip2conda:main"
 
 [project.urls]
-"Bug Tracker" = "https://github.com/duncanmmacleod/pip2conda/issues"
+"Bug Tracker" = "https://gitlab.com/gwpy/pip2conda/-/issues"
 "Documentation" = "https://pip2conda.readthedocs.io"
-"Homepage" = "https://github.com/duncanmmacleod/pip2conda/"
-"Source Code" = "https://github.com/duncanmmacleod/pip2conda.git"
+"Homepage" = "https://gitlab.com/gwpy/pip2conda/"
+"Source Code" = "https://gitlab.com/gwpy/pip2conda.git"
 
 # -- tools --------
+
+[tool.coverage.paths]
+source = [
+  "pip2conda/",
+  "*/pip2conda/",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+  # ignore when asked
+  "pragma: no( |-)cover",
+  # don't complain about typing blocks
+  "if (typing\\.)?TYPE_CHECKING",
+  # don't complain about __main__ blocks
+  "if __name__ == '__main__'",
+]
+omit = [
+  # don't report coverage for _version.py
+  # (generated automatically by setuptools-scm)
+  "*/_version.py",
+]
+# print report with one decimal point
+precision = 1
 
 [tool.pytest.ini_options]
 addopts = "-r a"

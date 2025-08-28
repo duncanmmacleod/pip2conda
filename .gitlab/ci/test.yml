@@ -1,0 +1,76 @@
+# -- Testing
+
+spec:
+  inputs:
+    job_name:
+      default: test
+      description: Name of the test job
+      type: string
+    stage:
+      default: test
+      description: Stage in which to run the jobs
+      type: string
+    needs:
+      default: []
+      description: List of jobs to depend on
+      type: array
+    python_versions:
+      description: List of Python versions to test against
+      type: array
+      default:
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        - "3.13"
+
+---
+
+include:
+  - local: .gitlab/ci/uv.yml
+
+$[[ inputs.job_name ]]:
+  extends:
+    - .uv
+  stage: $[[ inputs.stage ]]
+  parallel:
+    matrix:
+      - PYTHON_VERSION: $[[ inputs.python_versions ]]
+  image: "ghcr.io/astral-sh/uv:python$PYTHON_VERSION-bookworm"
+  needs: $[[ inputs.needs ]]
+  variables:
+    COVERAGE_FILE: ".coverage-${CI_JOB_NAME_SLUG}"
+  script:
+    - uv venv --python $PYTHON_VERSION
+    - WHEEL=$(echo *.whl)
+    - uv pip install $WHEEL[test]
+    - uv run -m pytest
+        --cov pip2conda
+        --junit-xml junit.xml
+        --pyargs
+        -ra
+        -v
+        pip2conda.tests
+    - uv run -m coverage xml -o coverage.xml
+  artifacts:
+    reports:
+      # coverage report
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+      # test report
+      junit: junit.xml
+    paths:
+      - .coverage-*
+
+python_coverage:
+  extends:
+    - .uv
+  stage: .post
+  script:
+    # combine coverage files from other jobs
+    - uvx coverage combine .coverage*
+    # print a report (for the record)
+    - uvx coverage report -m
+  artifacts: null
+  # report coverage here, now that we have all of the information
+  coverage: '/^TOTAL\s+.*\s+(\d+\.?\d*)%/'
