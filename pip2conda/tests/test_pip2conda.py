@@ -14,7 +14,11 @@ import requests
 from build import BuildException
 
 from ..pip2conda import (
+    _normalize_dependency_groups,
+    _normalize_group_name,
+    _resolve_dependency_group,
     main as pip2conda_main,
+    parse_dependency_groups,
     parse_requirements,
 )
 
@@ -163,7 +167,13 @@ install_requires =
     ]
 
 
-def test_setuptools_pyproject_toml(tmp_path):
+@pytest.mark.parametrize(("extras", "groups"), [
+    ([], []),
+    ([], ["test"]),
+    (["astropy"], []),
+    (["astropy"], ["test"]),
+])
+def test_setuptools_pyproject_toml(tmp_path, extras, groups):
     """Test parsing requirements of a setuptools project using
     only pyproject.toml, without checking with conda.".
     """
@@ -183,6 +193,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+astropy = [
+  "astropy",
+]
+
+[dependency-groups]
 test = [
   "pytest",
   "pytest-cov < 2.0.0; python_version < '3.11'",
@@ -192,23 +207,35 @@ test = [
 
     # run the tool
     out = tmp_path / "out.txt"
-    pip2conda_main(args=[
+    args = [
         "--project-dir", str(tmp_path),
         "--python-version", "3.11",
         "--output", str(out),
         "--skip-conda-forge-check",
-        "test",
-    ])
+    ]
+    for extra in (extras or []):
+        args.extend(["--extra", extra])
+    for group in (groups or []):
+        args.extend(["--group", group])
+    pip2conda_main(args=args)
 
     # assert that we get what we should
-    assert set(out.read_text().splitlines()) == {
+    expected = {
         "numpy>=1.20.0",
-        "pytest",
-        "pytest-cov>=2.0.0",
         "python==3.11.*",
         "scipy",
         "setuptools",
     }
+    if "astropy" in extras or []:
+        expected.update({
+            "astropy",
+        })
+    if "test" in groups or []:
+        expected.update({
+            "pytest",
+            "pytest-cov>=2.0.0",
+        })
+    assert set(out.read_text().splitlines()) == expected
 
 
 @pytest.mark.skipif(
@@ -325,9 +352,7 @@ test = [ "pytest" ]
         "--output", str(out),
         "--project-dir", str(tmp_path),
         "--skip-conda-forge-check",
-        "--verbose",
-        "--verbose",
-        "test",
+        "--extra", "test",
     ])
 
     # assert that we get what we should
@@ -367,3 +392,208 @@ def test_error(tmp_path):
         pip2conda_main(args=[
             "--project-dir", str(tmp_path),
         ])
+
+
+# -- dependency groups tests --------
+
+def test_normalize_group_name():
+    """Test dependency group name normalization."""
+    assert _normalize_group_name("test") == "test"
+    assert _normalize_group_name("Test") == "test"
+    assert _normalize_group_name("test_group") == "test-group"
+    assert _normalize_group_name("test-group") == "test-group"
+    assert _normalize_group_name("test.group") == "test-group"
+    assert _normalize_group_name("Test_Group.Name") == "test-group-name"
+
+
+def test_normalize_dependency_groups():
+    """Test dependency group normalization and duplicate detection."""
+    groups = {
+        "test": ["pytest"],
+        "docs": ["sphinx"],
+    }
+    normalized = _normalize_dependency_groups(groups)
+    assert normalized == {"test": ["pytest"], "docs": ["sphinx"]}
+
+    # Test duplicate detection
+    groups_with_duplicates = {
+        "test": ["pytest"],
+        "Test": ["coverage"],
+    }
+    with pytest.raises(ValueError, match="Duplicate dependency group names"):
+        _normalize_dependency_groups(groups_with_duplicates)
+
+
+def test_resolve_dependency_group_simple():
+    """Test resolving simple dependency groups."""
+    groups = {
+        "test": ["pytest", "coverage"],
+        "docs": ["sphinx"],
+    }
+
+    result = _resolve_dependency_group(groups, "test")
+    assert result == ["pytest", "coverage"]
+
+    result = _resolve_dependency_group(groups, "docs")
+    assert result == ["sphinx"]
+
+
+def test_resolve_dependency_group_with_includes():
+    """Test resolving dependency groups with includes."""
+    groups = {
+        "base": ["requests"],
+        "test": ["pytest", {"include-group": "base"}],
+        "dev": [{"include-group": "test"}, "black"],
+    }
+
+    result = _resolve_dependency_group(groups, "test")
+    assert result == ["pytest", "requests"]
+
+    result = _resolve_dependency_group(groups, "dev")
+    assert result == ["pytest", "requests", "black"]
+
+
+def test_resolve_dependency_group_cycle_detection():
+    """Test cycle detection in dependency group includes."""
+    groups = {
+        "a": [{"include-group": "b"}],
+        "b": [{"include-group": "a"}],
+    }
+
+    with pytest.raises(ValueError, match="Cyclic dependency group include"):
+        _resolve_dependency_group(groups, "a")
+
+
+def test_resolve_dependency_group_missing():
+    """Test error handling for missing dependency groups."""
+    groups = {
+        "test": ["pytest"],
+    }
+
+    with pytest.raises(LookupError, match="Dependency group 'missing' not found"):
+        _resolve_dependency_group(groups, "missing")
+
+
+def test_resolve_dependency_group_invalid_format():
+    """Test error handling for invalid dependency group formats."""
+    # Invalid group (not a list)
+    groups = {
+        "test": "not-a-list",
+    }
+    with pytest.raises(
+        TypeError,
+        match="Dependency group 'test' is not a list",
+    ):
+        _resolve_dependency_group(groups, "test")
+
+
+def test_resolve_dependency_group_invalid_table():
+    """Test error handling for invalid dependency-group table."""
+    groups = {
+        "test": [{"wrong-key": "value"}],
+    }
+    with pytest.raises(
+        ValueError,
+        match="Invalid dependency group item",
+    ):
+        _resolve_dependency_group(groups, "test")
+
+
+def test_parse_dependency_groups(tmp_path):
+    """Test parsing dependency groups from pyproject.toml."""
+    # Create a test pyproject.toml
+    pyproject_content = """
+[dependency-groups]
+test = ["pytest", "coverage"]
+docs = ["sphinx", "myst-parser"]
+dev = [
+    {include-group = "test"},
+    {include-group = "docs"},
+    "pre-commit",
+]
+"""
+    pyproject_file = tmp_path / "pyproject.toml"
+    pyproject_file.write_text(pyproject_content)
+
+    # Test parsing individual groups
+    result = parse_dependency_groups(tmp_path, ["test"])
+    assert result == ["pytest", "coverage"]
+
+    result = parse_dependency_groups(tmp_path, ["docs"])
+    assert result == ["sphinx", "myst-parser"]
+
+    # Test parsing group with includes
+    result = parse_dependency_groups(tmp_path, ["dev"])
+    assert result == ["pytest", "coverage", "sphinx", "myst-parser", "pre-commit"]
+
+    # Test parsing multiple groups
+    result = parse_dependency_groups(tmp_path, ["test", "docs"])
+    assert result == ["pytest", "coverage", "sphinx", "myst-parser"]
+
+    # Test parsing all groups
+    result = parse_dependency_groups(tmp_path, "ALL")
+    expected = [
+        "pytest",
+        "coverage",
+        "sphinx",
+        "myst-parser",
+        "pytest",
+        "coverage",
+        "sphinx",
+        "myst-parser",
+        "pre-commit",
+    ]
+    assert result == expected
+
+
+def test_parse_dependency_groups_no_file(tmp_path):
+    """Test parsing dependency groups when pyproject.toml doesn't exist."""
+    result = parse_dependency_groups(tmp_path, ["test"])
+    assert result == []
+
+
+def test_parse_dependency_groups_no_groups(tmp_path):
+    """Test parsing dependency groups when no dependency-groups table exists."""
+    pyproject_content = """
+[project]
+name = "test-project"
+version = "1.0.0"
+"""
+    pyproject_file = tmp_path / "pyproject.toml"
+    pyproject_file.write_text(pyproject_content)
+
+    result = parse_dependency_groups(tmp_path, ["test"])
+    assert result == []
+
+
+def test_pip2conda_main_with_dependency_groups(tmp_path):
+    """Test the main function with dependency groups."""
+    # Create test project
+    pyproject_content = """
+[project]
+name = "test-project"
+version = "1.0.0"
+dependencies = ["requests"]
+
+[dependency-groups]
+test = ["pytest", "coverage"]
+docs = ["sphinx"]
+"""
+    pyproject_file = tmp_path / "pyproject.toml"
+    pyproject_file.write_text(pyproject_content)
+
+    # Test with dependency groups
+    out = tmp_path / "out.txt"
+    pip2conda_main(args=[
+        "--project-dir", str(tmp_path),
+        "--dependency-group", "test",
+        "--output", str(out),
+        "--skip-conda-forge-check",
+        "--no-build-requires",
+    ])
+
+    output_lines = set(out.read_text().splitlines())
+    assert "requests" in output_lines
+    assert "pytest" in output_lines
+    assert "coverage" in output_lines
+    assert "sphinx" not in output_lines

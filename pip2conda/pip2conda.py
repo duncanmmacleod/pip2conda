@@ -13,9 +13,16 @@ import re
 import shlex
 import subprocess
 import tempfile
+import warnings
+from collections import defaultdict
 from importlib.metadata import PathDistribution
 from pathlib import Path
 from shutil import which
+
+try:
+    from tomllib import load as toml_load
+except ModuleNotFoundError:  # python < 3.11
+    from tomli import load as toml_load  # type: ignore[assignment,no-redef]
 
 import requests
 from build import (
@@ -100,6 +107,174 @@ def format_requirement(requirement, conda_forge_map=dict()):
             yield name + str(spec)
     else:
         yield name
+
+
+def _normalize_group_name(name):
+    """Normalize a dependency group name according to PEP 735.
+
+    Parameters
+    ----------
+    name : str
+        The dependency group name to normalize.
+
+    Returns
+    -------
+    str
+        The normalized group name.
+    """
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _normalize_dependency_groups(dependency_groups):
+    """Normalize dependency group names and detect duplicates.
+
+    Parameters
+    ----------
+    dependency_groups : `dict`
+        Dictionary mapping group names to their dependency lists.
+
+    Returns
+    -------
+    dict
+        Dictionary with normalized group names as keys.
+
+    Raises
+    ------
+    ValueError
+        If duplicate normalized names are detected.
+    """
+    original_names = defaultdict(list)
+    normalized_groups = {}
+
+    for group_name, value in dependency_groups.items():
+        normed_group_name = _normalize_group_name(group_name)
+        original_names[normed_group_name].append(group_name)
+        normalized_groups[normed_group_name] = value
+
+    errors = []
+    for normed_name, names in original_names.items():
+        if len(names) > 1:
+            errors.append(f"{normed_name} ({', '.join(names)})")
+    if errors:
+        msg = f"Duplicate dependency group names: {', '.join(errors)}"
+        raise ValueError(msg)
+
+    return normalized_groups
+
+
+def _resolve_dependency_group(dependency_groups, group, past_groups=()):
+    """Resolve a single dependency group, expanding includes recursively.
+
+    Parameters
+    ----------
+    dependency_groups : `dict`
+        Dictionary of all dependency groups.
+    group : str
+        The name of the group to resolve.
+    past_groups : `tuple`
+        Groups already being resolved (for cycle detection).
+
+    Returns
+    -------
+    list
+        List of resolved requirement strings.
+
+    Raises
+    ------
+    ValueError
+        If a cycle is detected or invalid data is found.
+    LookupError
+        If a referenced group doesn't exist.
+    """
+    if group in past_groups:
+        msg = f"Cyclic dependency group include: {group} -> {past_groups}"
+        raise ValueError(msg)
+
+    if group not in dependency_groups:
+        msg = f"Dependency group '{group}' not found"
+        raise LookupError(msg)
+
+    raw_group = dependency_groups[group]
+    if not isinstance(raw_group, list):
+        msg = f"Dependency group '{group}' is not a list"
+        raise TypeError(msg)
+
+    realized_group = []
+    for item in raw_group:
+        if isinstance(item, str):
+            # Validate as PEP 508 dependency specifier
+            Requirement(item)
+            realized_group.append(item)
+        elif isinstance(item, dict):
+            if tuple(item.keys()) != ("include-group",):
+                msg = f"Invalid dependency group item: {item}"
+                raise ValueError(msg)
+
+            include_group = _normalize_group_name(next(iter(item.values())))
+            realized_group.extend(
+                _resolve_dependency_group(
+                    dependency_groups,
+                    include_group,
+                    (*past_groups, group),
+                ),
+            )
+        else:
+            msg = f"Invalid dependency group item: {item}"
+            raise ValueError(msg)  # noqa: TRY004
+
+    return realized_group
+
+
+def parse_dependency_groups(project_dir, groups_to_parse):
+    """Parse dependency groups from pyproject.toml.
+
+    Parameters
+    ----------
+    project_dir : `pathlib.Path`
+        Path to the project directory containing pyproject.toml.
+    groups_to_parse : `list` of `str` or `str`
+        List of dependency group names to parse, or "ALL" for all groups.
+
+    Returns
+    -------
+    list
+        List of requirement strings from the specified dependency groups.
+
+    Raises
+    ------
+    FileNotFoundError
+        If pyproject.toml doesn't exist.
+    ValueError
+        If dependency groups data is invalid.
+    LookupError
+        If a requested group doesn't exist.
+    """
+    pyproject_path = project_dir / "pyproject.toml"
+    if not pyproject_path.exists():
+        return []
+
+    with pyproject_path.open("rb") as f:
+        pyproject_data = toml_load(f)
+
+    dependency_groups_raw = pyproject_data.get("dependency-groups", {})
+    if not dependency_groups_raw:
+        return []
+
+    dependency_groups = _normalize_dependency_groups(dependency_groups_raw)
+
+    if groups_to_parse == "ALL":
+        groups_to_parse = list(dependency_groups.keys())
+    elif isinstance(groups_to_parse, str):
+        groups_to_parse = [groups_to_parse]
+
+    # Normalize requested group names
+    groups_to_parse = [_normalize_group_name(g) for g in groups_to_parse]
+
+    requirements = []
+    for group in groups_to_parse:
+        requirements.extend(_resolve_dependency_group(dependency_groups, group))
+
+    return requirements
 
 
 # -- python metadata parsing
@@ -338,6 +513,7 @@ def parse_all_requirements(
     project,
     python_version=None,
     extras=[],
+    dependency_groups=[],
     requirements_files=[],
     skip_build_requires=False,
 ):
@@ -354,6 +530,10 @@ def parse_all_requirements(
     extras : `list` of `str` or ``'ALL'``
         the list of extras to parse from the ``'options.extras_require'``
         key, or ``'ALL'`` to read all of them
+
+    dependency_groups : `list` of `str` or ``'ALL'``
+        the list of PEP 735 dependency groups to parse, or ``'ALL'``
+        to read all of them
 
     requirements_files : `list` of `str`
         list of paths to Pip requirements.txt-format files that list
@@ -431,6 +611,21 @@ def parse_all_requirements(
         log.info("Processing %s", reqfile)
         for req in parse_requirements_file(
             reqfile,
+            environment=environment,
+            conda_forge_map=conda_forge_map,
+        ):
+            log.debug("    parsed %s", req)
+            yield req
+
+    # then dependency groups (PEP 735)
+    if dependency_groups and project.suffix == ".whl":
+        msg = "Cannot process dependency groups from a wheel file"
+        raise ValueError(msg)
+    if dependency_groups:
+        log.info("Processing dependency groups")
+        group_reqs = parse_dependency_groups(project, dependency_groups)
+        for req in parse_requirements(
+            group_reqs,
             environment=environment,
             conda_forge_map=conda_forge_map,
         ):
@@ -546,6 +741,7 @@ def pip2conda(
     project,
     python_version=None,
     extras=[],
+    dependency_groups=[],
     requirements_files=[],
     skip_build_requires=False,
     skip_conda_forge_check=False,
@@ -556,6 +752,7 @@ def pip2conda(
         project,
         python_version=python_version,
         extras=extras,
+        dependency_groups=dependency_groups,
         requirements_files=requirements_files,
         skip_build_requires=skip_build_requires,
     )
@@ -583,18 +780,57 @@ def create_parser():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=prog,
     )
+
+    # DEPRECATED positional argument
     parser.add_argument(
-        "extras_name",
+        "positional_extras",
+        metavar="EXTRA",
         nargs="*",
         default=[],
-        help="name of setuptools 'extras' to parse",
+        help=(
+            "name of setuptools 'extras' to parse [DEPRECATED, use -e/--extra instead]"
+        ),
+    )
+
+    parser.add_argument(
+        "-e",
+        "--extra",
+        metavar="EXTRA",
+        dest="extras",
+        action="append",
+        default=[],
+        help=(
+            "include optional dependencies from the specified extra name; may be"
+            "provided more than once"
+        ),
+    )
+    parser.add_argument(
+        "-g",
+        "--group",
+        "--dependency-group",
+        dest="dependency_groups",
+        metavar="GROUP",
+        default=[],
+        action="append",
+        help=(
+            "Install the specified dependency group from a "
+            "`pylock.toml` or `pyproject.toml`"
+        ),
     )
     parser.add_argument(
         "-a",
+        "--all-extras",
         "--all",
         action="store_true",
         default=False,
         help="include all extras",
+    )
+    parser.add_argument(
+        "-G",
+        "--all-groups",
+        action="store_true",
+        default=False,
+        help="include all dependency groups",
     )
     parser.add_argument(
         "-b",
@@ -678,11 +914,21 @@ def main(args=None):
         root_logger.addHandler(handler)
         root_logger.setLevel(max(3 - args.verbose, 0) * 10)
 
+    # handle extras
+    if args.positional_extras:
+        warnings.warn(
+            "Positional extras are deprecated, use -e/--extra instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        args.extras.extend(args.positional_extras)
+
     # run the thing
     requirements = sorted(pip2conda(
         args.project,
         python_version=args.python_version,
-        extras="ALL" if args.all else args.extras_name,
+        extras="ALL" if args.all_extras else args.extras,
+        dependency_groups="ALL" if args.all_groups else args.dependency_groups,
         requirements_files=args.requirements,
         skip_build_requires=args.no_build_requires,
         skip_conda_forge_check=args.skip_conda_forge_check,
