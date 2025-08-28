@@ -1,8 +1,11 @@
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Parse a Python project for package requirements and print out a list of
-packages that can be installed using conda from the conda-forge channel.
+"""Parse requirements for a Python project and convert for installing with conda.
+
+This project parses the Python metadata for a project, including optional-dependencies
+and dependency-groups, and returns a list of packages that can be installed using
+Conda from the conda-forge channel.
 """
 
 import argparse
@@ -51,7 +54,8 @@ CONDA = (
     or os.environ.get("CONDA_EXE", "conda")
 )
 
-# configure logging
+# default timeout for an HTTP GET request
+REQUESTS_TIMEOUT = 60
 
 # regex to match version spec characters
 VERSION_OPERATOR = re.compile("[><=!]")
@@ -65,14 +69,14 @@ def load_conda_forge_name_map():
     See https://github.com/conda-incubator/grayskull/blob/main/grayskull/pypi/config.yaml
     """
     # parse the config file and return (pypi_name: conda_forge_name) pairs
-    with open(PYPI_CONFIG) as conf:
+    with Path(PYPI_CONFIG).open() as conf:
         return {
             x: y["conda_forge"]
             for x, y in yaml.load(conf).items()
         }
 
 
-def format_requirement(requirement, conda_forge_map=dict()):
+def format_requirement(requirement, conda_forge_map=None):
     """Format a (pip) Requirement as a conda dependency.
 
     Complicated specifiers (with multiple conditions) are separated into
@@ -87,7 +91,7 @@ def format_requirement(requirement, conda_forge_map=dict()):
         `(pypi_name, conda_forge_name)` mapping dictionary.
 
     Yields
-    -------
+    ------
     formatted : `str`
         A formatted conda requirement.
 
@@ -101,6 +105,8 @@ def format_requirement(requirement, conda_forge_map=dict()):
     >>> print(list(format_requirement(req)))
     ['python-framel!=8.46.0', 'python-framel>=8.40.1']
     """
+    if conda_forge_map is None:
+        conda_forge_map = {}
     name = conda_forge_map.get(requirement.name, requirement.name.lower())
     if requirement.specifier:
         for spec in requirement.specifier:
@@ -292,7 +298,8 @@ def parse_setup_requires(project_dir):
     setup_requires : `list`
         The list of build requirements.
     """
-    from setuptools import Distribution
+    from setuptools import Distribution  # noqa: PLC0415
+
     origin = Path().cwd()
     os.chdir(project_dir)
     try:
@@ -309,16 +316,16 @@ def read_wheel_metadata(path):
         tempfile.TemporaryDirectory() as tmpdir,
         WheelFile(path, "r") as whl,
     ):
-        tmpdir = Path(tmpdir)
+        tmppath = Path(tmpdir)
         # extract only the dist_info directory
         distinfo = [
             name for name in whl.namelist()
             if name.startswith(f"{whl.dist_info_path}/")
         ]
-        whl.extractall(members=distinfo, path=tmpdir)
+        whl.extractall(members=distinfo, path=tmppath)
         # return the metadata as JSON
         return PathDistribution(
-            tmpdir / whl.dist_info_path,
+            tmppath / whl.dist_info_path,
         ).metadata.json
 
 
@@ -362,6 +369,9 @@ def build_project_metadata(project_dir):
                 )
                 env.install(builder.build_system_requires)
                 metadir = builder.prepare("wheel", tmpdir)
+        if metadir is None:
+            msg = f"Failed to prepare wheel for {project_dir}"
+            raise RuntimeError(msg)
         dist = PathDistribution(Path(metadir))
         meta = dist.metadata.json
 
@@ -377,7 +387,7 @@ def build_project_metadata(project_dir):
     return meta
 
 
-def parse_req_extras(req, environment=None, conda_forge_map=dict()):
+def parse_req_extras(req, environment=None, conda_forge_map=None):
     """Parse the extras for a requirement.
 
     This unpackes a requirement like `package[extra]` into the list of
@@ -396,7 +406,10 @@ def parse_req_extras(req, environment=None, conda_forge_map=dict()):
         return
 
     # query pypi for metadata
-    resp = requests.get(f"https://pypi.org/pypi/{req.name}/json")
+    resp = requests.get(
+        f"https://pypi.org/pypi/{req.name}/json",
+        timeout=REQUESTS_TIMEOUT,
+    )
     resp.raise_for_status()
     data = resp.json()
 
@@ -417,11 +430,9 @@ def _evaluate_marker(marker, environment=None, extras=None):
 
     if environment is None:
         environment = {}
-    if extras is None:
-        extras = []
 
     # loop over all extras (including 'no extra') and see if there's a match
-    for extra in {""} | set(extras):
+    for extra in {""} | set(extras or []):
         environment["extra"] = extra
         if marker.evaluate(environment):
             return True
@@ -430,7 +441,7 @@ def _evaluate_marker(marker, environment=None, extras=None):
 
 def parse_requirements(
     requirements,
-    conda_forge_map=dict(),
+    conda_forge_map=None,
     environment=None,
     extras=None,
     depth=0,
@@ -492,7 +503,7 @@ def parse_requirements(
 def parse_requirements_file(file, **kwargs):
     """Parse a requirements.txt-format file."""
     if isinstance(file, str | os.PathLike):
-        with open(file) as fileobj:
+        with Path(file).open() as fileobj:
             yield from parse_requirements_file(fileobj, **kwargs)
             return
 
@@ -512,9 +523,10 @@ def parse_requirements_file(file, **kwargs):
 def parse_all_requirements(
     project,
     python_version=None,
-    extras=[],
-    dependency_groups=[],
-    requirements_files=[],
+    extras=None,
+    dependency_groups=None,
+    requirements_files=None,
+    *,
     skip_build_requires=False,
 ):
     """Parse all requirements for a project.
@@ -607,7 +619,7 @@ def parse_all_requirements(
         yield req
 
     # then requirements.txt files
-    for reqfile in requirements_files:
+    for reqfile in requirements_files or []:
         log.info("Processing %s", reqfile)
         for req in parse_requirements_file(
             reqfile,
@@ -642,36 +654,37 @@ def find_packages(requirements, conda=CONDA):
     that if it fails because packages are missing, they can be
     identified.
     """
-    prefix = tempfile.mktemp(prefix=Path(__file__).stem)
     conda = str(conda)
-    cmd = [
-        str(conda),
-        "create",  # solve for a new environment
-        "--dry-run",  # don't actually do anything but solve
-        "--json",  # print JSON-format output
-        "--quiet",  # don't print logging info
-        "--yes",  # don't ask questions
-        "--override-channels",  # ignore user's conda config
-        "--channel", "conda-forge",  # only look at conda-forge
-        "--prefix", prefix,  # don't overwrite existing env by mistake!
-    ] + sorted(requirements)
+    with tempfile.TemporaryDirectory(prefix=Path(__file__).stem) as prefix:
+        cmd = [
+            str(conda),
+            "create",  # solve for a new environment
+            "--dry-run",  # don't actually do anything but solve
+            "--json",  # print JSON-format output
+            "--quiet",  # don't print logging info
+            "--yes",  # don't ask questions
+            "--override-channels",  # ignore user's conda config
+            "--channel", "conda-forge",  # only look at conda-forge
+            "--prefix", prefix,  # don't overwrite existing env by mistake!
+            *sorted(requirements),
+        ]
 
-    if conda.lower().endswith(".bat"):
-        # Windows (batch?) does weird things with angle brackets,
-        # so we need to escape them in a weird way
-        cmd = [re.sub("([><])", r"^^^\1", arg) for arg in cmd]
-        # remove quotes from batch script name, powershell doesn't understand
-        cmdstr = str(conda) + " " + shlex.join(cmd[1:])
-    else:
-        cmdstr = shlex.join(cmd)
+        if conda.lower().endswith(".bat"):
+            # Windows (batch?) does weird things with angle brackets,
+            # so we need to escape them in a weird way
+            cmd = [re.sub("([><])", r"^^^\1", arg) for arg in cmd]
+            # remove quotes from batch script name, powershell doesn't understand
+            cmdstr = str(conda) + " " + shlex.join(cmd[1:])
+        else:
+            cmdstr = shlex.join(cmd)
 
-    log.debug("$ %s", cmdstr)
-    return subprocess.run(
-        cmd,
-        check=False,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
+        log.debug("$ %s", cmdstr)
+        return subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
 
 
 def filter_requirements(requirements, conda=CONDA):
@@ -731,7 +744,7 @@ def write_yaml(path, packages):
         "channels": ["conda-forge"],
         "dependencies": packages,
     }
-    with open(path, "w") as file:
+    with path.open("w") as file:
         yaml.dump(env, file)
 
 
@@ -740,13 +753,15 @@ def write_yaml(path, packages):
 def pip2conda(
     project,
     python_version=None,
-    extras=[],
-    dependency_groups=[],
-    requirements_files=[],
+    extras=None,
+    dependency_groups=None,
+    requirements_files=None,
+    *,
     skip_build_requires=False,
     skip_conda_forge_check=False,
     conda=CONDA,
 ):
+    """Parse requirements for a project and return conda packages."""
     # parse requirements
     requirements = parse_all_requirements(
         project,
@@ -769,16 +784,19 @@ def pip2conda(
 
 # -- command line operation -
 
+def _get_prog():
+    """Get the program name for the usage text."""
+    if __name__ == "__main__":
+        return Path(__file__).stem
+    return __name__.rsplit(".", 1)[-1]
+
+
 def create_parser():
     """Create a command-line `ArgumentParser` for this tool."""
-    if __name__ == "__main__":
-        prog = __module__.__name__
-    else:
-        prog = __name__.rsplit(".", 1)[-1]
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        prog=prog,
+        prog=_get_prog(),
     )
 
     # DEPRECATED positional argument
@@ -853,7 +871,7 @@ def create_parser():
         "--project",
         "--project-dir",
         "--wheel",
-        default=os.getcwd(),
+        default=Path.cwd(),
         type=Path,
         help="project directory, or path to wheel",
     )

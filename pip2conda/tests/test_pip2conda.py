@@ -32,22 +32,24 @@ PIP2CONDA_WHL = (
 
 # -- utilities --------------
 
-def mock_proc(returncode=0, data=dict()):
+def mock_proc(returncode=0, data=None):
+    """Mock a `subprocess.CompletedProcess`."""
     proc = mock.create_autospec(subprocess.CompletedProcess)
     proc.returncode = returncode
-    proc.stdout = json.dumps(data)
+    proc.stdout = json.dumps(data or {})
     return proc
 
 
 @pytest.fixture
 def whl(tmp_path):
+    """Download the pip2conda wheel file."""
     try:
-        resp = requests.get(PIP2CONDA_WHL)
+        resp = requests.get(PIP2CONDA_WHL, timeout=60)
         resp.raise_for_status()
     except requests.RequestException as exc:  # pragma: no cover
         pytest.skip(str(exc))
     whl = tmp_path / Path(PIP2CONDA_WHL).name
-    with open(whl, "wb") as file:
+    with whl.open("wb") as file:
         file.write(resp.content)
     return whl
 
@@ -56,42 +58,47 @@ def whl(tmp_path):
 
 @pytest.mark.parametrize(("reqs", "environment", "extras", "result"), [
     # simple list of packages, no environmment, no extras
-    (
+    pytest.param(
         ["a", "b"],
         None,
         None,
         ["a", "b"],
+        id="simple",
     ),
     # environment marker with negative match
-    (
+    pytest.param(
         ["a ; python_version < '2.0'", "b"],
         {"python_version": "2.0"},
         None,
         ["b"],
+        id="env_marker_neg",
     ),
     # environment marker and extra with negative match
-    (
+    pytest.param(
         ["a ; python_version >= '2.0' and extra == 'test'", "b"],
         {"python_version": "2.0"},
         None,
         ["b"],
+        id="env_marker_and_extra_neg",
     ),
     # no environment marker and extra with negative match
-    (
+    pytest.param(
         ["a ; python_version >= '2.0' and extra == 'test'", "b"],
         None,
         ["dev"],
         ["b"],
+        id="env_marker_and_extra_neg_2",
     ),
     # environment marker and extra with positive match
-    (
+    pytest.param(
         ["a ; python_version >= '2.0' and extra == 'test'", "b"],
         {"python_version": "2.0"},
         ["test"],
         ["a", "b"],
+        id="env_marker_and_extra_pos",
     ),
     # environment marker and extra with positive and negative matches
-    (
+    pytest.param(
         [
             "a ; python_version >= '2.0' and extra == 'test'",
             "b ; extra == 'dev'",
@@ -99,9 +106,10 @@ def whl(tmp_path):
         {"python_version": "2.0"},
         ["test", "doc"],
         ["a"],
+        id="env_marker_and_extra_pos_neg",
     ),
     # environment marker and extras with multiple positive matches
-    (
+    pytest.param(
         [
             "a ; python_version >= '2.0' and extra == 'test'",
             "b ; extra == 'dev'",
@@ -109,6 +117,7 @@ def whl(tmp_path):
         {"python_version": "2.0"},
         ["test", "dev", "doc"],
         ["a", "b"],
+        id="env_marker_and_extra_pos_neg_2",
     ),
 ])
 def test_parse_requirements(reqs, environment, extras, result):
@@ -123,8 +132,9 @@ def test_parse_requirements(reqs, environment, extras, result):
 # -- end-to-end tests -------
 
 def test_setuptools_mock(tmp_path):
-    """Test parsing requirements of a mixed setuptools project
-    while mocking out a conda error.
+    """Test parsing a mixed setuptools project.
+
+    This test also includes a mocked conda error indicating a missing package.
     """
     # write package information
     (tmp_path / "pyproject.toml").write_text("""[build-system]
@@ -174,9 +184,7 @@ install_requires =
     (["astropy"], ["test"]),
 ])
 def test_setuptools_pyproject_toml(tmp_path, extras, groups):
-    """Test parsing requirements of a setuptools project using
-    only pyproject.toml, without checking with conda.".
-    """
+    """Test parsing a setuptools project using only pyproject.toml."""
     # write package information
     (tmp_path / "pyproject.toml").write_text("""
 [build-system]
@@ -243,9 +251,7 @@ test = [
     reason="cannot find conda",
 )
 def test_setuptools_setup_cfg(tmp_path):
-    """Test parsing requirements of a setuptools project that doesn't
-    have a pyproject.toml file at all.
-    """
+    """Test parsing a setuptools project that doesn't have a pyproject.toml file."""
     # write package information (using exact pins for reproducibility)
     (tmp_path / "setup.cfg").write_text("""
 [metadata]
