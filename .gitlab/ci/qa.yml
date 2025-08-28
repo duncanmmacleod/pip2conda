@@ -18,6 +18,7 @@ include:
 
   - component: gitlab.com/components/dependency-scanning/main@~latest
     inputs:
+      job_name: dependency-scanning
       stage: $[[ inputs.stage ]]
       allow_failure: true
 
@@ -29,6 +30,18 @@ include:
 
 .sast-analyzer:
   needs: []
+
+uv-lock:
+  extends: .uv
+  stage: .pre
+  script:
+    - uv lock --resolution lowest-direct
+  artifacts:
+    paths:
+      - uv.lock
+
+dependency-scanning:
+  needs: [uv-lock]
 
 ruff:
   stage: $[[ inputs.stage ]]
