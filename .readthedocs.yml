@@ -8,16 +8,12 @@ build:
   os: "ubuntu-lts-latest"
   tools:
     python: "mambaforge-latest"
+  jobs:
+    install:
+      - pip install . --group docs
 
 conda:
   environment: docs/environment.yml
 
 sphinx:
   configuration: docs/conf.py
-
-python:
-  install:
-    - method: pip
-      path: .
-      extra_requirements:
-        - docs
