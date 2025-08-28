@@ -53,10 +53,10 @@ VERSION_OPERATOR = re.compile("[><=!]")
 # -- conda utilities --------
 
 def load_conda_forge_name_map():
-    """Load the PyPI <-> conda-forge package name map from grayskull
+    """Load the PyPI <-> conda-forge package name map from grayskull.
 
     See https://github.com/conda-incubator/grayskull/blob/main/grayskull/pypi/config.yaml
-    """  # noqa: E501
+    """
     # parse the config file and return (pypi_name: conda_forge_name) pairs
     with open(PYPI_CONFIG) as conf:
         return {
@@ -129,8 +129,7 @@ def parse_setup_requires(project_dir):
 
 
 def read_wheel_metadata(path):
-    """Read the metadata for a project from a wheel.
-    """
+    """Read the metadata for a project from a wheel."""
     with (
         tempfile.TemporaryDirectory() as tmpdir,
         WheelFile(path, "r") as whl,
@@ -237,8 +236,7 @@ def parse_req_extras(req, environment=None, conda_forge_map=dict()):
 
 
 def _evaluate_marker(marker, environment=None, extras=None):
-    """Evaluate whether an environment marker matches this environment.
-    """
+    """Evaluate whether an environment marker matches this environment."""
     if not marker:  # no marker, always True
         return True
 
@@ -262,7 +260,7 @@ def parse_requirements(
     extras=None,
     depth=0,
 ):
-    """Parse requirement specs from a list of lines
+    """Parse requirement specs from a list of lines.
 
     Parameters
     ----------
@@ -317,8 +315,7 @@ def parse_requirements(
 # -- requirements.txt -------
 
 def parse_requirements_file(file, **kwargs):
-    """Parse a requirements.txt-format file.
-    """
+    """Parse a requirements.txt-format file."""
     if isinstance(file, str | os.PathLike):
         with open(file) as fileobj:
             yield from parse_requirements_file(fileobj, **kwargs)
@@ -344,7 +341,7 @@ def parse_all_requirements(
     requirements_files=[],
     skip_build_requires=False,
 ):
-    """Parse all requirements for a project
+    """Parse all requirements for a project.
 
     Parameters
     ----------
@@ -483,8 +480,7 @@ def find_packages(requirements, conda=CONDA):
 
 
 def filter_requirements(requirements, conda=CONDA):
-    """Filter requirements by running conda/mamba to see what is missing.
-    """
+    """Filter requirements by running conda/mamba to see what is missing."""
     requirements = set(requirements)
 
     # find all packages with conda
@@ -535,8 +531,7 @@ def filter_requirements(requirements, conda=CONDA):
 # -- output formatting ------
 
 def write_yaml(path, packages):
-    """Write the given ``packages`` as a conda environment YAML file
-    """
+    """Write the given ``packages`` as a conda environment YAML file."""
     env = {
         "channels": ["conda-forge"],
         "dependencies": packages,
@@ -578,10 +573,9 @@ def pip2conda(
 # -- command line operation -
 
 def create_parser():
-    """Create a command-line `ArgumentParser` for this tool
-    """
+    """Create a command-line `ArgumentParser` for this tool."""
     if __name__ == "__main__":
-        prog = __module__.__name__  # noqa: F821
+        prog = __module__.__name__
     else:
         prog = __name__.rsplit(".", 1)[-1]
     parser = argparse.ArgumentParser(
@@ -669,8 +663,7 @@ def create_parser():
 
 
 def main(args=None):
-    """Run the thing
-    """
+    """Run the thing."""
     parser = create_parser()
     args = parser.parse_args(args=args)
 
