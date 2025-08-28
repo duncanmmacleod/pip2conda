@@ -1,8 +1,7 @@
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Tests for pip2conda
-"""
+"""Tests for pip2conda."""
 
 import json
 import subprocess
@@ -109,8 +108,7 @@ def whl(tmp_path):
     ),
 ])
 def test_parse_requirements(reqs, environment, extras, result):
-    """Test that :func:`parse_requirements` correctly evaluates markers.
-    """
+    """Test that :func:`parse_requirements` correctly evaluates markers."""
     assert list(parse_requirements(
         reqs,
         environment=environment,
@@ -167,7 +165,7 @@ install_requires =
 
 def test_setuptools_pyproject_toml(tmp_path):
     """Test parsing requirements of a setuptools project using
-    only pyproject.toml, without checking with conda."
+    only pyproject.toml, without checking with conda.".
     """
     # write package information
     (tmp_path / "pyproject.toml").write_text("""
@@ -272,8 +270,7 @@ setup()
 
 
 def test_requirements_txt(tmp_path):
-    """Test parsing requirements from requirements.txt files.
-    """
+    """Test parsing requirements from requirements.txt files."""
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("""
 mock ; python_version < '3.0'
@@ -299,8 +296,7 @@ scipy >= 1.4.0
 
 
 def test_poetry(tmp_path):
-    """Test parsing requirements from a poetry package.
-    """
+    """Test parsing requirements from a poetry package."""
     (tmp_path / "pyproject.toml").write_text("""
 [build-system]
 requires = [ "poetry-core>=1.0.0" ]
@@ -345,8 +341,7 @@ test = [ "pytest" ]
 
 
 def test_wheel(tmp_path, whl):
-    """Test parsing requirements from a wheel file.
-    """
+    """Test parsing requirements from a wheel file."""
     # run the tool
     out = tmp_path / "out.txt"
     pip2conda_main(args=[
@@ -367,8 +362,7 @@ def test_wheel(tmp_path, whl):
 
 
 def test_error(tmp_path):
-    """Test that giving no valid input results in an error.
-    """
+    """Test that giving no valid input results in an error."""
     with pytest.raises(BuildException):
         pip2conda_main(args=[
             "--project-dir", str(tmp_path),

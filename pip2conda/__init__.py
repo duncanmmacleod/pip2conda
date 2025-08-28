@@ -1,8 +1,7 @@
 # Copyright (C) Cardiff University (2022)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Translate pip requirements into conda requirements
-"""
+"""Translate pip requirements into conda requirements."""
 
 __author__ = "Duncan Macleod <duncanmmacleod@gmail.com>"
 
