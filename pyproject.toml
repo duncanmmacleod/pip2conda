@@ -97,6 +97,13 @@ omit = [
 # print report with one decimal point
 precision = 1
 
+[tool.mypy]
+check_untyped_defs = true
+exclude = [
+  "^docs/",
+]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "-r a"
 filterwarnings = [

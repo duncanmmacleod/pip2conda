@@ -21,6 +21,9 @@ include:
       job_name: dependency-scanning
       stage: $[[ inputs.stage ]]
       allow_failure: true
+    rules:
+      # Only run if dependency scanning is enabled
+      - if: '$GITLAB_FEATURES =~ /\bdependency_scanning\b/'
 
   - component: gitlab.com/components/sast/sast@f6a5077c4ebd85a087ea0a15ab2113d52ef8e77e
     inputs:
