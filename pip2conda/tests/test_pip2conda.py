@@ -32,7 +32,10 @@ PIP2CONDA_WHL = (
 
 # -- utilities --------------
 
-def mock_proc(returncode=0, data=None):
+def mock_proc(
+    returncode: int = 0,
+    data: dict | None = None,
+) -> mock.MagicMock:
     """Mock a `subprocess.CompletedProcess`."""
     proc = mock.create_autospec(subprocess.CompletedProcess)
     proc.returncode = returncode
@@ -41,7 +44,7 @@ def mock_proc(returncode=0, data=None):
 
 
 @pytest.fixture
-def whl(tmp_path):
+def whl(tmp_path: Path) -> Path:
     """Download the pip2conda wheel file."""
     try:
         resp = requests.get(PIP2CONDA_WHL, timeout=60)
@@ -452,10 +455,10 @@ def test_resolve_dependency_group_with_includes():
         "dev": [{"include-group": "test"}, "black"],
     }
 
-    result = _resolve_dependency_group(groups, "test")
+    result = _resolve_dependency_group(groups, "test")  # type: ignore[arg-type]
     assert result == ["pytest", "requests"]
 
-    result = _resolve_dependency_group(groups, "dev")
+    result = _resolve_dependency_group(groups, "dev")  # type: ignore[arg-type]
     assert result == ["pytest", "requests", "black"]
 
 
@@ -467,7 +470,7 @@ def test_resolve_dependency_group_cycle_detection():
     }
 
     with pytest.raises(ValueError, match="Cyclic dependency group include"):
-        _resolve_dependency_group(groups, "a")
+        _resolve_dependency_group(groups, "a") # type: ignore[arg-type]
 
 
 def test_resolve_dependency_group_missing():
@@ -490,7 +493,7 @@ def test_resolve_dependency_group_invalid_format():
         TypeError,
         match="Dependency group 'test' is not a list",
     ):
-        _resolve_dependency_group(groups, "test")
+        _resolve_dependency_group(groups, "test")  # type: ignore[arg-type]
 
 
 def test_resolve_dependency_group_invalid_table():
@@ -502,7 +505,7 @@ def test_resolve_dependency_group_invalid_table():
         ValueError,
         match="Invalid dependency group item",
     ):
-        _resolve_dependency_group(groups, "test")
+        _resolve_dependency_group(groups, "test")  # type: ignore[arg-type]
 
 
 def test_parse_dependency_groups(tmp_path):

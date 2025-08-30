@@ -3,9 +3,7 @@
 
 """Module execution entry point for pip2conda."""
 
-import sys
-
 from .pip2conda import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

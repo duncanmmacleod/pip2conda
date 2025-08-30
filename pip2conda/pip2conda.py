@@ -8,6 +8,8 @@ and dependency-groups, and returns a list of packages that can be installed usin
 Conda from the conda-forge channel.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -21,6 +23,7 @@ from collections import defaultdict
 from importlib.metadata import PathDistribution
 from pathlib import Path
 from shutil import which
+from typing import TYPE_CHECKING
 
 try:
     from tomllib import load as toml_load
@@ -44,6 +47,26 @@ try:
 except ImportError:
     Formatter = logging.Formatter
 
+if TYPE_CHECKING:
+    from collections.abc import (
+        Collection,
+        Iterable,
+        Iterator,
+        Mapping,
+        Sequence,
+    )
+    from typing import (
+        Literal,
+        TextIO,
+    )
+
+    from packaging.markers import Marker
+
+    DependencyGroupsType = Mapping[
+        str,
+        Sequence[str | Mapping[Literal["include-group"], str]],
+    ]
+
 log = logging.getLogger(__package__)
 
 yaml = YAML()
@@ -51,7 +74,8 @@ yaml = YAML()
 # conda config
 CONDA = (
     which("conda", mode=os.X_OK)
-    or os.environ.get("CONDA_EXE", "conda")
+    or os.environ.get("CONDA_EXE")
+    or "conda"
 )
 
 # default timeout for an HTTP GET request
@@ -63,7 +87,7 @@ VERSION_OPERATOR = re.compile("[><=!]")
 
 # -- conda utilities --------
 
-def load_conda_forge_name_map():
+def load_conda_forge_name_map() -> dict[str, str]:
     """Load the PyPI <-> conda-forge package name map from grayskull.
 
     See https://github.com/conda-incubator/grayskull/blob/main/grayskull/pypi/config.yaml
@@ -76,7 +100,10 @@ def load_conda_forge_name_map():
         }
 
 
-def format_requirement(requirement, conda_forge_map=None):
+def format_requirement(
+    requirement: Requirement,
+    conda_forge_map: dict[str, str] | None = None,
+) -> Iterator[str]:
     """Format a (pip) Requirement as a conda dependency.
 
     Complicated specifiers (with multiple conditions) are separated into
@@ -115,7 +142,7 @@ def format_requirement(requirement, conda_forge_map=None):
         yield name
 
 
-def _normalize_group_name(name):
+def _normalize_group_name(name: str) -> str:
     """Normalize a dependency group name according to PEP 735.
 
     Parameters
@@ -131,7 +158,9 @@ def _normalize_group_name(name):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def _normalize_dependency_groups(dependency_groups):
+def _normalize_dependency_groups(
+    dependency_groups: DependencyGroupsType,
+) -> DependencyGroupsType:
     """Normalize dependency group names and detect duplicates.
 
     Parameters
@@ -150,7 +179,7 @@ def _normalize_dependency_groups(dependency_groups):
         If duplicate normalized names are detected.
     """
     original_names = defaultdict(list)
-    normalized_groups = {}
+    normalized_groups: DependencyGroupsType = {}
 
     for group_name, value in dependency_groups.items():
         normed_group_name = _normalize_group_name(group_name)
@@ -168,7 +197,11 @@ def _normalize_dependency_groups(dependency_groups):
     return normalized_groups
 
 
-def _resolve_dependency_group(dependency_groups, group, past_groups=()):
+def _resolve_dependency_group(
+    dependency_groups: DependencyGroupsType,
+    group: str,
+    past_groups: tuple[str, ...] = (),
+) -> list[str]:
     """Resolve a single dependency group, expanding includes recursively.
 
     Parameters
@@ -231,7 +264,10 @@ def _resolve_dependency_group(dependency_groups, group, past_groups=()):
     return realized_group
 
 
-def parse_dependency_groups(project_dir, groups_to_parse):
+def parse_dependency_groups(
+    project_dir: Path,
+    groups_to_parse: Iterable[str] | str,
+) -> list[str]:
     """Parse dependency groups from pyproject.toml.
 
     Parameters
@@ -285,7 +321,7 @@ def parse_dependency_groups(project_dir, groups_to_parse):
 
 # -- python metadata parsing
 
-def parse_setup_requires(project_dir):
+def parse_setup_requires(project_dir: Path) -> list[str]:
     """Parse the list of `setup_requires` packages from a setuptools dist.
 
     Parameters
@@ -310,7 +346,7 @@ def parse_setup_requires(project_dir):
     return dist.setup_requires
 
 
-def read_wheel_metadata(path):
+def read_wheel_metadata(path: Path | str) -> dict[str, str | list[str]]:
     """Read the metadata for a project from a wheel."""
     with (
         tempfile.TemporaryDirectory() as tmpdir,
@@ -329,7 +365,7 @@ def read_wheel_metadata(path):
         ).metadata.json
 
 
-def build_project_metadata(project_dir):
+def build_project_metadata(project_dir: Path) -> dict[str, str | list[str]]:
     """Build the metadata for a project.
 
     This function is basically a stripped down version of
@@ -376,18 +412,23 @@ def build_project_metadata(project_dir):
         meta = dist.metadata.json
 
     # inject the build system requirements into the metadata
+    build_requires: Iterable[str]
     if (project_dir / "pyproject.toml").is_file():
         build_requires = builder.build_system_requires
     else:
         # not given in pyproject.toml, so need to parse
         # manually from setup.cfg
         build_requires = parse_setup_requires(project_dir)
-    meta["build_system_requires"] = build_requires
+    meta["build_system_requires"] = list(build_requires)
 
     return meta
 
 
-def parse_req_extras(req, environment=None, conda_forge_map=None):
+def parse_req_extras(
+    req: Requirement,
+    environment: dict[str, str] | None = None,
+    conda_forge_map: dict[str, str] | None = None,
+) -> Iterator[str]:
     """Parse the extras for a requirement.
 
     This unpackes a requirement like `package[extra]` into the list of
@@ -398,7 +439,8 @@ def parse_req_extras(req, environment=None, conda_forge_map=None):
     ----------
     req : `packaging.requirements.Requirement`
         the requirement to format
-
+    environment : `dict`, optional
+        the environment against which to evaluate markers
     conda_forge_map : `dict`
         `(pypi_name, conda_forge_name)` mapping dictionary
     """
@@ -423,7 +465,11 @@ def parse_req_extras(req, environment=None, conda_forge_map=None):
     )
 
 
-def _evaluate_marker(marker, environment=None, extras=None):
+def _evaluate_marker(
+    marker: Marker | None,
+    environment: dict[str, str] | None = None,
+    extras: Iterable[str] | None = None,
+) -> bool:
     """Evaluate whether an environment marker matches this environment."""
     if not marker:  # no marker, always True
         return True
@@ -440,12 +486,12 @@ def _evaluate_marker(marker, environment=None, extras=None):
 
 
 def parse_requirements(
-    requirements,
-    conda_forge_map=None,
-    environment=None,
-    extras=None,
-    depth=0,
-):
+    requirements: Iterable[str],
+    conda_forge_map: dict[str, str] | None = None,
+    environment: dict[str, str] | None = None,
+    extras: Iterable[str] | None = None,
+    depth: int = 0,
+) -> Iterator[str]:
     """Parse requirement specs from a list of lines.
 
     Parameters
@@ -500,7 +546,10 @@ def parse_requirements(
 
 # -- requirements.txt -------
 
-def parse_requirements_file(file, **kwargs):
+def parse_requirements_file(
+    file: str | os.PathLike[str] | TextIO,
+    **kwargs,
+) -> Iterator[str]:
     """Parse a requirements.txt-format file."""
     if isinstance(file, str | os.PathLike):
         with Path(file).open() as fileobj:
@@ -521,14 +570,14 @@ def parse_requirements_file(file, **kwargs):
 
 
 def parse_all_requirements(
-    project,
-    python_version=None,
-    extras=None,
-    dependency_groups=None,
-    requirements_files=None,
+    project: Path,
+    python_version: str | None = None,
+    extras: Iterable[str] | str | None = None,
+    dependency_groups: Iterable[str] | str | None = None,
+    requirements_files: Iterable[Path | str] | None = None,
     *,
-    skip_build_requires=False,
-):
+    skip_build_requires: bool = False,
+) -> Iterator[str]:
     """Parse all requirements for a project.
 
     Parameters
@@ -587,7 +636,7 @@ def parse_all_requirements(
         environment["python_version"] = ".".join(parts[:2])
         environment["python_full_version"] = ".".join(parts)
     elif "requires_python" in meta:
-        python_version = meta["requires_python"]
+        python_version = str(meta["requires_python"])
     if python_version:
         log.info("Using Python %s", python_version)
         if not python_version.startswith((">", "<", "=")):
@@ -647,7 +696,10 @@ def parse_all_requirements(
 
 # -- conda ------------------
 
-def find_packages(requirements, conda=CONDA):
+def find_packages(
+    requirements: set[str] | list[str],
+    conda: str | Path = CONDA,
+) -> subprocess.CompletedProcess[str]:
     """Run conda/mamba to resolve an environment.
 
     This does not actually create an environment, but is called so
@@ -687,7 +739,10 @@ def find_packages(requirements, conda=CONDA):
         )
 
 
-def filter_requirements(requirements, conda=CONDA):
+def filter_requirements(
+    requirements: set[str] | list[str],
+    conda: str | Path = CONDA,
+) -> set[str]:
     """Filter requirements by running conda/mamba to see what is missing."""
     requirements = set(requirements)
 
@@ -697,7 +752,7 @@ def filter_requirements(requirements, conda=CONDA):
     pfind = find_packages(requirements, conda=conda)
 
     if pfind.returncode < 0:  # killed with signal
-        return pfind.check_returncode()  # raises
+        pfind.check_returncode()  # raises
     if pfind.returncode:  # something went wrong
         # parse the JSON report
         report = json.loads(pfind.stdout)
@@ -738,7 +793,7 @@ def filter_requirements(requirements, conda=CONDA):
 
 # -- output formatting ------
 
-def write_yaml(path, packages):
+def write_yaml(path: Path, packages: Collection[str]) -> None:
     """Write the given ``packages`` as a conda environment YAML file."""
     env = {
         "channels": ["conda-forge"],
@@ -751,26 +806,26 @@ def write_yaml(path, packages):
 # -- pip2conda main func ----
 
 def pip2conda(
-    project,
-    python_version=None,
-    extras=None,
-    dependency_groups=None,
-    requirements_files=None,
+    project: Path,
+    python_version: str | None = None,
+    extras: list[str] | str | None = None,
+    dependency_groups: list[str] | str | None = None,
+    requirements_files: list[Path] | None = None,
     *,
-    skip_build_requires=False,
-    skip_conda_forge_check=False,
-    conda=CONDA,
-):
+    skip_build_requires: bool = False,
+    skip_conda_forge_check: bool = False,
+    conda: str | Path = CONDA,
+) -> set[str]:
     """Parse requirements for a project and return conda packages."""
     # parse requirements
-    requirements = parse_all_requirements(
+    requirements = set(parse_all_requirements(
         project,
         python_version=python_version,
         extras=extras,
         dependency_groups=dependency_groups,
         requirements_files=requirements_files,
         skip_build_requires=skip_build_requires,
-    )
+    ))
 
     if skip_conda_forge_check:
         return requirements
@@ -784,14 +839,14 @@ def pip2conda(
 
 # -- command line operation -
 
-def _get_prog():
+def _get_prog() -> str:
     """Get the program name for the usage text."""
     if __name__ == "__main__":
         return Path(__file__).stem
     return __name__.rsplit(".", 1)[-1]
 
 
-def create_parser():
+def create_parser() -> argparse.ArgumentParser:
     """Create a command-line `ArgumentParser` for this tool."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -916,10 +971,10 @@ def create_parser():
     return parser
 
 
-def main(args=None):
+def main(args: list[str] | None = None) -> None:
     """Run the thing."""
     parser = create_parser()
-    args = parser.parse_args(args=args)
+    opts = parser.parse_args(args=args)
 
     # configure logging
     root_logger = logging.getLogger()
@@ -930,35 +985,35 @@ def main(args=None):
             datefmt="%Y-%m-%dT%H:%M:%S%z",
         ))
         root_logger.addHandler(handler)
-        root_logger.setLevel(max(3 - args.verbose, 0) * 10)
+        root_logger.setLevel(max(3 - opts.verbose, 0) * 10)
 
     # handle extras
-    if args.positional_extras:
+    if opts.positional_extras:
         warnings.warn(
             "Positional extras are deprecated, use -e/--extra instead",
             DeprecationWarning,
             stacklevel=2,
         )
-        args.extras.extend(args.positional_extras)
+        opts.extras.extend(opts.positional_extras)
 
     # run the thing
     requirements = sorted(pip2conda(
-        args.project,
-        python_version=args.python_version,
-        extras="ALL" if args.all_extras else args.extras,
-        dependency_groups="ALL" if args.all_groups else args.dependency_groups,
-        requirements_files=args.requirements,
-        skip_build_requires=args.no_build_requires,
-        skip_conda_forge_check=args.skip_conda_forge_check,
-        conda=args.conda,
+        opts.project,
+        python_version=opts.python_version,
+        extras="ALL" if opts.all_extras else opts.extras,
+        dependency_groups="ALL" if opts.all_groups else opts.dependency_groups,
+        requirements_files=opts.requirements,
+        skip_build_requires=opts.no_build_requires,
+        skip_conda_forge_check=opts.skip_conda_forge_check,
+        conda=opts.conda,
     ))
     log.info("Package finding complete")
 
     # print output to file or stdout
     out = "\n".join(requirements)
-    if args.output and args.output.suffix in {".yml", ".yaml"}:
-        write_yaml(args.output, requirements)
-    elif args.output:
-        args.output.write_text(out + "\n")
+    if opts.output and opts.output.suffix in {".yml", ".yaml"}:
+        write_yaml(opts.output, requirements)
+    elif opts.output:
+        opts.output.write_text(out + "\n")
     else:
         print(out)

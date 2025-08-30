@@ -115,7 +115,7 @@ filterwarnings = [
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "ANN",  # type annotations
+  "ANN003",  # type annotations for **kwargs
   "D203",  # blank line before class docstring
   "D213",  # docstring summary on second line
   "D413",  # blank line after last section
