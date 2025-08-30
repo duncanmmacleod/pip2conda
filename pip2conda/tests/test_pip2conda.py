@@ -1,4 +1,4 @@
-# Copyright (C) Cardiff University (2022)
+# Copyright (c) 2022-2025 Cardiff University
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Tests for pip2conda."""
