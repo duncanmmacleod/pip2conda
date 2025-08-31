@@ -13,10 +13,6 @@ into a conda-forge requirement suitable for installation with `conda/mamba`.
 [![License](https://img.shields.io/pypi/l/pip2conda.svg)](https://choosealicense.com/licenses/gpl-3.0/)
 ![Supported Python versions](https://img.shields.io/pypi/pyversions/pip2conda.svg)
 
-[![Build status](https://gitlab.com/gwpy/pip2conda/badges/main/pipeline.svg)](https://gitlab.com/gwpy/pip2conda/-/pipelines/)
-[![Documentation status](https://readthedocs.org/projects/pip2conda/badge/?version=latest)](https://pip2conda.readthedocs.io/en/latest/?badge=latest)
-[![Coverage status](https://gitlab.com/gwpy/pip2conda/badges/main/coverage.svg)](https://gitlab.com/gwpy/pip2conda)
-
 ## Installation
 
 For best results, please install from [conda-forge](https://conda-forge.org/):
@@ -51,11 +47,6 @@ setuptools>=61.0
 wheel
 ```
 
-## Converting requirements.txt
+For more details, see the online documentation at
 
-To convert an existing `requirements.txt` file into a conda environment.txt file,
-use the `-r/--requirements` option:
-
-```shell
-pip2conda -r ./requirements.txt
-```
+<https://pip2conda.readthedocs.io>
