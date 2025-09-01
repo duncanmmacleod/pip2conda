@@ -7,6 +7,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+(v0.8.0)=
+
+## 0.8.0 - 2025-09-01
+
+-   Fix safe-netrc version reference
+    [!42](https://gitlab.com/gwpy/pip2conda/-/merge_requests/42)
+-   Improve use of logging
+    [!43](https://gitlab.com/gwpy/pip2conda/-/merge_requests/43)
+-   Add support for dependency groups
+    [!49](https://gitlab.com/gwpy/pip2conda/-/merge_requests/49)
+-   Add type annotations
+    [!51](https://gitlab.com/gwpy/pip2conda/-/merge_requests/51)
+-   Add changelog and rebuild sphinx docs
+    [!53](https://gitlab.com/gwpy/pip2conda/-/merge_requests/53)
+
+[Release details](https://gitlab.com/gwpy/pip2conda/-/releases/0.8.0)
+
 (v0.7.1)=
 
 ## 0.7.1 - 2025-02-14
