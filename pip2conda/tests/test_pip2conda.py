@@ -156,15 +156,23 @@ install_requires =
     # run the tool (mocking out the call to conda)
     out = tmp_path / "out.txt"
     with mock.patch("subprocess.run") as _run:
-        _run.return_value = mock_proc(
-            returncode=1,
-            data={
-                "exception_name": "PackagesNotFoundError",
-                "packages": [
-                    "d",
-                ],
-            },
-        )
+        _run.side_effect = [
+            # Fail attempt 1 with a missing package
+            mock_proc(
+                returncode=1,
+                data={
+                    "exception_name": "PackagesNotFoundError",
+                    "packages": [
+                        "d",
+                    ],
+                },
+            ),
+            # Succeed attempt 2 with d removed
+            mock_proc(
+                returncode=0,
+                data={},
+            ),
+        ]
         pip2conda_main(args=[
             "--python-version", "9.9",
             "--project-dir", str(tmp_path),
