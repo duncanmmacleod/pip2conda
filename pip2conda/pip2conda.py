@@ -78,6 +78,9 @@ CONDA = (
     or "conda"
 )
 
+# how many times to try re-resolving packages with conda
+MAX_CONDA_ITERATION = 10
+
 # default timeout for an HTTP GET request
 REQUESTS_TIMEOUT = 60
 
@@ -749,11 +752,23 @@ def filter_requirements(
     # find all packages with conda
     exe = Path(conda).stem
     log.info("Finding packages with %s", exe)
-    pfind = find_packages(requirements, conda=conda)
+    count = 1
+    while True:
+        log.debug("Attempt %d", count)
 
-    if pfind.returncode < 0:  # killed with signal
-        pfind.check_returncode()  # raises
-    if pfind.returncode:  # something went wrong
+        # run conda to find packages
+        pfind = find_packages(requirements, conda=conda)
+
+        # all packages were found
+        if pfind.returncode == 0:
+            break
+
+        # killed with signal
+        if pfind.returncode < 0:
+            pfind.check_returncode()  # raises
+
+        # -- something went wrong
+
         # parse the JSON report
         report = json.loads(pfind.stdout)
 
@@ -766,27 +781,45 @@ def filter_requirements(
             pfind.check_returncode()  # raises exception
 
         # one or more packages are missing
-        log.warning(
-            "%s failed to find some packages, "
-            "attempting to parse what's missing",
-            exe,
-        )
-        missing = {
-            pkg.split("[", 1)[0].lower()  # strip out build info
-            for pkg in report["packages"]
-        }
+        if count == 1:
+            log.warning(
+                "%s failed to find some packages, "
+                "attempting to parse what's missing",
+                exe,
+            )
+        requirements = _parse_missing(report, requirements)
+        count += 1
 
-        # filter out the missing packages
-        for req in list(requirements):
-            guesses = {
-                # name with version (no whitespace)
-                req.replace(" ", ""),
-                # name only
-                VERSION_OPERATOR.split(req)[0].strip().lower(),
-            }
-            if guesses & missing:  # package is missing
-                log.warning("  removing '%s'", req)
-                requirements.remove(req)
+        if count > MAX_CONDA_ITERATION:
+            msg = f"too many attempts (> {MAX_CONDA_ITERATION}) to resolve packages"
+            raise RuntimeError(msg)
+
+    return requirements
+
+
+def _parse_missing(
+    report: dict,
+    requirements: Collection[str],
+) -> set[str]:
+    """Parse a conda JSON report and remove missing packages from requirements."""
+    missing = {
+        pkg.split("[", 1)[0].lower()  # strip out build info
+        for pkg in report["packages"]
+    }
+
+    requirements = set(requirements)
+
+    # filter out the missing packages
+    for req in list(requirements):
+        guesses = {
+            # name with version (no whitespace)
+            req.replace(" ", ""),
+            # name only
+            VERSION_OPERATOR.split(req)[0].strip().lower(),
+        }
+        if guesses & missing:  # package is missing
+            log.warning("  removing '%s'", req)
+            requirements.remove(req)
 
     return requirements
 

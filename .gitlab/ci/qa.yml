@@ -63,7 +63,7 @@ ruff:
 mypy:
   extends:
     - .qa
-  image: quay.io/lib/python
+  image: python
   script:
     - python -m pip install mypy mypy-gitlab-code-quality
     - mypy
