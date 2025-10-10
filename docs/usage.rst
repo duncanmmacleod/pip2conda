@@ -46,7 +46,7 @@ You can also point pip2conda at a wheel file for any project:
 Converting requirements.txt
 ===========================
 
-To convert an existing ``requirements.txt`` file into a conda ``environment.yml`` 
+To convert an existing ``requirements.txt`` file into a conda ``environment.yml``
 file, use the ``-r/--requirements`` option:
 
 .. code-block:: shell
@@ -55,6 +55,85 @@ file, use the ``-r/--requirements`` option:
 
 This will read the requirements from the specified file and output the
 conda-compatible equivalents.
+
+Working with Dependency Groups
+===============================
+
+`pip2conda` supports both standard `PEP 735 <https://peps.python.org/pep-0735/>`__
+dependency groups and custom `pip2conda`-specific dependency groups.
+
+Standard Dependency Groups
+---------------------------
+
+Standard dependency groups are defined in the ``[dependency-groups]`` table
+of your ``pyproject.toml``:
+
+.. code-block:: toml
+
+    [dependency-groups]
+    test = ["pytest", "coverage"]
+    docs = ["sphinx", "myst-parser"]
+
+You can install specific groups using the ``-g/--dependency-group`` option:
+
+.. code-block:: shell
+
+    pip2conda -g test
+    pip2conda --dependency-group docs
+
+Or install all groups at once:
+
+.. code-block:: shell
+
+    pip2conda --all-groups
+
+Custom Dependency Groups
+-------------------------
+
+For projects that use tools like ``uv`` which may fail when dependency groups
+contain non-pip-installable packages, you can define custom dependency groups
+that are only recognized by `pip2conda`:
+
+.. code-block:: toml
+
+    [tool.pip2conda.dependency-groups]
+    conda = ["my-conda-only-package", "another-conda-package"]
+    custom-test = ["pytest-conda", "conda-coverage"]
+
+These custom groups work exactly like standard groups:
+
+.. code-block:: shell
+
+    pip2conda -g conda
+    pip2conda -g custom-test
+
+Mixing Standard and Custom Groups
+----------------------------------
+
+You can use both standard and custom dependency groups in the same project.
+Custom groups take precedence when both define the same group name:
+
+.. code-block:: toml
+
+    [dependency-groups]
+    test = ["pytest", "coverage"]
+
+    [tool.pip2conda.dependency-groups]
+    test = ["pytest-conda", "conda-coverage"]  # This overrides the standard test group
+    conda = ["my-conda-only-package"]
+
+Groups can also reference each other using ``include-group``:
+
+.. code-block:: toml
+
+    [dependency-groups]
+    base = ["requests", "numpy"]
+
+    [tool.pip2conda.dependency-groups]
+    extended = [
+        {"include-group" = "base"},
+        "additional-conda-package",
+    ]
 
 Output Formats
 ==============
@@ -68,7 +147,7 @@ conda environment files.
 
     .. code-block:: shell
         :caption: Write output in YAML format
-        
+
         pip2conda -o requirements.yaml
 
     .. code-block:: yaml
