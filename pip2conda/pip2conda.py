@@ -273,6 +273,13 @@ def parse_dependency_groups(
 ) -> list[str]:
     """Parse dependency groups from pyproject.toml.
 
+    This function reads dependency groups from both the standard
+    `PEP 735 <https://peps.python.org/pep-0735/>`_
+    ``[dependency-groups]`` table and the custom
+    ``[tool.pip2conda.dependency-groups]`` table.
+    Custom groups take precedence over standard groups when both define
+    the same group name.
+
     Parameters
     ----------
     project_dir : `pathlib.Path`
@@ -293,6 +300,33 @@ def parse_dependency_groups(
         If dependency groups data is invalid.
     LookupError
         If a requested group doesn't exist.
+
+    Examples
+    --------
+    Standard dependency groups in pyproject.toml:
+
+    .. code-block:: toml
+
+        [dependency-groups]
+        test = ["pytest", "coverage"]
+
+    Custom pip2conda-only dependency groups:
+
+    .. code-block:: toml
+
+        [tool.pip2conda.dependency-groups]
+        conda = ["my-conda-only-package"]
+
+    Both can be used together, with custom groups taking precedence:
+
+    .. code-block:: toml
+
+        [dependency-groups]
+        test = ["pytest"]
+
+        [tool.pip2conda.dependency-groups]
+        test = ["pytest", "conda-specific-test-tool"]
+        conda = ["my-conda-only-package"]
     """
     pyproject_path = project_dir / "pyproject.toml"
     if not pyproject_path.exists():
@@ -301,11 +335,25 @@ def parse_dependency_groups(
     with pyproject_path.open("rb") as f:
         pyproject_data = toml_load(f)
 
-    dependency_groups_raw = pyproject_data.get("dependency-groups", {})
-    if not dependency_groups_raw:
+    # Get standard PEP 735 dependency groups
+    standard_groups_raw = pyproject_data.get("dependency-groups", {})
+
+    # Get custom pip2conda dependency groups
+    custom_groups_raw = pyproject_data.get("tool", {}).get("pip2conda", {}).get(
+        "dependency-groups",
+        {},
+    )
+
+    # If neither exists, return empty
+    if not standard_groups_raw and not custom_groups_raw:
         return []
 
-    dependency_groups = _normalize_dependency_groups(dependency_groups_raw)
+    # Normalize both sets of groups
+    standard_groups = _normalize_dependency_groups(standard_groups_raw)
+    custom_groups = _normalize_dependency_groups(custom_groups_raw)
+
+    # Merge groups with custom taking precedence
+    dependency_groups = {**standard_groups, **custom_groups}
 
     if groups_to_parse == "ALL":
         groups_to_parse = list(dependency_groups.keys())
@@ -920,7 +968,9 @@ def create_parser() -> argparse.ArgumentParser:
         action="append",
         help=(
             "Install the specified dependency group from a "
-            "`pylock.toml` or `pyproject.toml`"
+            "`pylock.toml` or `pyproject.toml`. Groups can be defined in the standard "
+            "[dependency-groups] table or in the custom "
+            "[tool.pip2conda.dependency-groups] table (custom groups take precedence)"
         ),
     )
     parser.add_argument(
@@ -936,7 +986,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--all-groups",
         action="store_true",
         default=False,
-        help="include all dependency groups",
+        help="include all dependency groups (both standard and custom)",
     )
     parser.add_argument(
         "-b",
