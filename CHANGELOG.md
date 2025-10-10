@@ -7,6 +7,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+(v0.9.0)=
+
+## 0.9.0 - 2025-10-10
+
+-   Add support for custom dependency groups
+    ([!57](https://gitlab.com/gwpy/pip2conda/-/merge_requests/57))
+
+[Release details](https://gitlab.com/gwpy/pip2conda/-/releases/0.9.0)
+
 (v0.8.1)=
 
 ## 0.8.1 - 2025-10-07
