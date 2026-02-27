@@ -1053,7 +1053,7 @@ invalid-specs = [
     # Should fail when trying to validate the invalid requirement spec
     with pytest.raises(
         InvalidRequirement,
-        match="Expected end or semicolon",
+        match="(Expected end or semicolon|Expected semicolon)",
     ):
         parse_dependency_groups(tmp_path, ["invalid-specs"])
 
