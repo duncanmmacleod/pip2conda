@@ -7,6 +7,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+(v0.9.1)=
+
+## 0.9.1 - 2026-02-27
+
+-   Bump minimum version of grayskull
+    ([!58](https://gitlab.com/gwpy/pip2conda/-/merge_requests/58))
+
+[Release details](https://gitlab.com/gwpy/pip2conda/-/releases/0.9.1)
+
 (v0.9.0)=
 
 ## 0.9.0 - 2025-10-10
