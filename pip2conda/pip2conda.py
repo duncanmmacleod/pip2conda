@@ -78,6 +78,12 @@ CONDA = (
     or "conda"
 )
 
+#: Set of conda error types that indicate missing packages
+CONDA_MISSING_CHANNELS_ERRORS = {
+    "PackagesNotFoundError",
+    "PackagesNotFoundInChannelsError",
+}
+
 # how many times to try re-resolving packages with conda
 MAX_CONDA_ITERATION = 10
 
@@ -821,7 +827,7 @@ def filter_requirements(
         report = json.loads(pfind.stdout)
 
         # report isn't a simple 'missing package' error
-        if report.get("exception_name", None) != "PackagesNotFoundError":
+        if report.get("exception_name", None) not in CONDA_MISSING_CHANNELS_ERRORS:
             log.critical("\n".join((
                 f"{exe} failed to resolve packages:",
                 report.get("error", report.get("solver_problems", "unknown")),
