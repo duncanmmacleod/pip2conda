@@ -78,6 +78,11 @@ CONDA = (
     or "conda"
 )
 
+#: Set of conda error types to retry
+CONDA_RETRY_ERRORS = {
+    "CondaHTTPError",
+}
+
 #: Set of conda error types that indicate missing packages
 CONDA_MISSING_CHANNELS_ERRORS = {
     "PackagesNotFoundError",
@@ -826,27 +831,41 @@ def filter_requirements(
         # parse the JSON report
         report = json.loads(pfind.stdout)
 
-        # report isn't a simple 'missing package' error
-        if report.get("exception_name", None) not in CONDA_MISSING_CHANNELS_ERRORS:
-            log.critical("\n".join((
-                f"{exe} failed to resolve packages:",
-                report.get("error", report.get("solver_problems", "unknown")),
-            )))
-            pfind.check_returncode()  # raises exception
+        # error isn't something we can/should retry, error now
+        err = report.get("exception_name", None)
+        msg = report.get("error", report.get("solver_problems", "unknown error"))
+        if err not in CONDA_MISSING_CHANNELS_ERRORS | CONDA_RETRY_ERRORS:
+            log.critical(
+                "%s failed: %s",
+                exe,
+                msg,
+            )
+            pfind.check_returncode()
+
+        count += 1
 
         # one or more packages are missing
-        if count == 1:
+        if err in CONDA_MISSING_CHANNELS_ERRORS:
             log.warning(
                 "%s failed to find some packages, "
                 "attempting to parse what's missing",
                 exe,
             )
-        requirements = _parse_missing(report, requirements)
-        count += 1
+            requirements = _parse_missing(report, requirements)
+        # error is something to immediately retry
+        else:
+            log.warning(
+                "%s failed: %s",
+                exe,
+                msg,
+            )
+            continue
 
         if count > MAX_CONDA_ITERATION:
             msg = f"too many attempts (> {MAX_CONDA_ITERATION}) to resolve packages"
             raise RuntimeError(msg)
+
+        log.debug("Retrying...")
 
     return requirements
 
