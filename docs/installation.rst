@@ -22,6 +22,13 @@ You can also install directly from PyPI:
 
    python -m pip install pip2conda
 
+If you want to use the experimental rattler backend,
+install the ``rattler`` optional extra as well:
+
+.. code-block:: shell
+
+   python -m pip install "pip2conda[rattler]"
+
 Requirements
 ============
 

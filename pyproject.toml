@@ -51,6 +51,11 @@ dynamic = [
   "version",
 ]
 
+[project.optional-dependencies]
+rattler = [
+  "py-rattler >=0.23.2",
+]
+
 [dependency-groups]
 docs = [
   "furo",

@@ -11,6 +11,7 @@ Conda from the conda-forge channel.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -20,6 +21,7 @@ import subprocess
 import tempfile
 import warnings
 from collections import defaultdict
+from functools import partial
 from importlib.metadata import PathDistribution
 from pathlib import Path
 from shutil import which
@@ -47,6 +49,7 @@ from . import __version__
 
 if TYPE_CHECKING:
     from collections.abc import (
+        Callable,
         Collection,
         Iterable,
         Iterator,
@@ -802,97 +805,224 @@ def find_packages(
 def filter_requirements(
     requirements: set[str] | list[str],
     conda: str | Path = CONDA,
+    *,
+    solver: Literal["conda", "rattler"] = "conda",
 ) -> set[str]:
-    """Filter requirements by running conda/mamba to see what is missing."""
-    requirements = set(requirements)
+    """Filter requirements by solving against conda-forge.
 
-    # find all packages with conda
-    exe = Path(conda).stem
-    log.info("Finding packages with %s", exe)
-    count = 1
-    while True:
-        log.debug("Attempt %d", count)
+    Parameters
+    ----------
+    requirements : `set` or `list` of `str`
+        Requirement matchspecs to validate against conda-forge.
 
-        # run conda to find packages
-        pfind = find_packages(requirements, conda=conda)
+    conda : `str` or `pathlib.Path`, optional
+        Conda/mamba executable for the ``solver='conda'`` backend.
 
-        # all packages were found
-        if pfind.returncode == 0:
-            break
+    solver : `str`, optional
+        Backend to use for filtering, either ``'conda'`` (default)
+        or ``'rattler'``.
+    """
+    if solver == "conda":
+        exe = Path(conda).stem
 
-        # killed with signal
-        if pfind.returncode < 0:
-            pfind.check_returncode()  # raises
+        return _filter_requirements_with_backend(
+            requirements,
+            backend_name=exe,
+            solve_once=partial(_find_packages_conda, conda=conda, exe=exe),
+            parse_missing=_parse_missing_conda,
+            retryable=_is_retryable_conda,
+        )
 
-        # -- something went wrong
+    if solver == "rattler":
+        return _filter_requirements_with_backend(
+            requirements,
+            backend_name="py-rattler",
+            solve_once=_find_packages_rattler,
+            parse_missing=_parse_missing_rattler_exception,
+            retryable=_is_retryable_rattler,
+        )
 
-        # parse the JSON report
-        report = json.loads(pfind.stdout)
-
-        # error isn't something we can/should retry, error now
-        err = report.get("exception_name", None)
-        msg = report.get("error", report.get("solver_problems", "unknown error"))
-        if err not in CONDA_MISSING_CHANNELS_ERRORS | CONDA_RETRY_ERRORS:
-            log.critical(
-                "%s failed: %s",
-                exe,
-                msg,
-            )
-            pfind.check_returncode()
-
-        count += 1
-
-        # one or more packages are missing
-        if err in CONDA_MISSING_CHANNELS_ERRORS:
-            log.warning(
-                "%s failed to find some packages, "
-                "attempting to parse what's missing",
-                exe,
-            )
-            requirements = _parse_missing(report, requirements)
-        # error is something to immediately retry
-        else:
-            log.warning(
-                "%s failed: %s",
-                exe,
-                msg,
-            )
-            continue
-
-        if count > MAX_CONDA_ITERATION:
-            msg = f"too many attempts (> {MAX_CONDA_ITERATION}) to resolve packages"
-            raise RuntimeError(msg)
-
-        log.debug("Retrying...")
-
-    return requirements
+    msg = f"unknown solver backend '{solver}'"
+    raise ValueError(msg)
 
 
-def _parse_missing(
-    report: dict,
+def _find_packages_conda(
+    requirements: Collection[str],
+    *,
+    conda: str | Path,
+    exe: str,
+) -> None:
+    """Run one conda solve attempt and raise on failure."""
+    pfind = find_packages(set(requirements), conda=conda)
+
+    # all packages were found
+    if pfind.returncode == 0:
+        return
+
+    # killed with signal
+    if pfind.returncode < 0:
+        pfind.check_returncode()  # raises
+
+    report = json.loads(pfind.stdout)
+    err = report.get("exception_name", None)
+    msg = report.get("error", report.get("solver_problems", "unknown error"))
+
+    # error isn't something we can/should retry, error now
+    if err not in CONDA_MISSING_CHANNELS_ERRORS | CONDA_RETRY_ERRORS:
+        log.critical(
+            "%s failed: %s",
+            exe,
+            msg,
+        )
+        pfind.check_returncode()
+
+    raise RuntimeError(json.dumps(report))
+
+
+def _parse_missing_conda(
+    exc: Exception,
     requirements: Collection[str],
 ) -> set[str]:
-    """Parse a conda JSON report and remove missing packages from requirements."""
+    """Parse missing packages from a conda failure exception."""
+    report = json.loads(str(exc))
     missing = {
         pkg.split("[", 1)[0].lower()  # strip out build info
         for pkg in report["packages"]
     }
+    return _remove_missing_requirements(requirements, missing)
 
-    requirements = set(requirements)
 
-    # filter out the missing packages
-    for req in list(requirements):
+def _is_retryable_conda(exc: Exception) -> bool:
+    """Return True when a conda solver failure is transient."""
+    try:
+        report = json.loads(str(exc))
+    except json.JSONDecodeError:
+        return False
+
+    return report.get("exception_name") in CONDA_RETRY_ERRORS
+
+
+def _find_packages_rattler(requirements: Collection[str]) -> None:
+    """Run py-rattler solver for the requested requirements."""
+    from rattler import (  # noqa: PLC0415
+        MatchSpec,
+        VirtualPackage,
+    )
+    from rattler.solver import solve  # noqa: PLC0415
+
+    specs = [MatchSpec(req) for req in sorted(requirements)]
+    specstr = ", ".join(repr(str(s)) for s in specs)
+    log.debug("Solving with py-rattler for specs: %s", specstr)
+    virtual_packages = VirtualPackage.detect()
+    asyncio.run(solve(
+        ["conda-forge"],
+        specs,
+        virtual_packages=virtual_packages,
+    ))
+
+
+def _parse_missing_rattler(
+    error: str,
+    requirements: Collection[str],
+) -> set[str]:
+    """Parse py-rattler errors and remove missing packages from requirements."""
+    missing = {
+        pkg.lower()
+        for pkg in re.findall(r"No candidates were found for ([^\s]+)\s", error)
+    }
+
+    return _remove_missing_requirements(requirements, missing)
+
+
+def _parse_missing_rattler_exception(
+    exc: Exception,
+    requirements: Collection[str],
+) -> set[str]:
+    """Parse missing packages from a py-rattler failure exception."""
+    return _parse_missing_rattler(str(exc), requirements)
+
+
+def _is_retryable_rattler(exc: Exception) -> bool:
+    """Return True when a py-rattler solver failure is transient."""
+    from rattler import exceptions as rattler_exceptions  # noqa: PLC0415
+
+    return isinstance(exc, (
+        rattler_exceptions.FetchRepoDataError,
+        rattler_exceptions.GatewayError,
+        rattler_exceptions.IoError,
+    ))
+
+
+def _remove_missing_requirements(
+    requirements: Collection[str],
+    missing: Collection[str],
+) -> set[str]:
+    """Remove missing package requirements from a requirement collection."""
+    missing = {pkg.lower() for pkg in missing}
+    filtered = set(requirements)
+    if not missing:
+        return filtered
+
+    # filter out missing packages that correspond to top-level requirements
+    for req in list(filtered):
         guesses = {
-            # name with version (no whitespace)
             req.replace(" ", ""),
-            # name only
             VERSION_OPERATOR.split(req)[0].strip().lower(),
         }
-        if guesses & missing:  # package is missing
+        if guesses & missing:
             log.warning("  removing '%s'", req)
-            requirements.remove(req)
+            filtered.remove(req)
 
-    return requirements
+    return filtered
+
+
+def _filter_requirements_with_backend(
+    requirements: set[str] | list[str],
+    backend_name: str,
+    solve_once: Callable[[Collection[str]], None],
+    parse_missing: Callable[[Exception, Collection[str]], set[str]],
+    retryable: Callable[[Exception], bool],
+) -> set[str]:
+    """Filter requirements using a backend solve callback and parse callback."""
+    filtered = set(requirements)
+
+    log.info("Finding packages with %s", backend_name)
+    count = 1
+    while True:
+        log.debug("Attempt %d", count)
+        try:
+            solve_once(filtered)
+            break
+        except Exception as exc:
+            count += 1
+            if count > MAX_CONDA_ITERATION:
+                msg = (
+                    f"too many attempts (> {MAX_CONDA_ITERATION}) "
+                    "to resolve packages"
+                )
+                raise RuntimeError(msg) from exc
+
+            if retryable(exc):
+                log.warning("%s failed: %s", backend_name, exc)
+                log.debug("Retrying...")
+                continue
+
+            log.warning(
+                "%s failed to find some packages, "
+                "checking for missing packages",
+                backend_name,
+            )
+            new_filtered = parse_missing(exc, filtered)
+            nmissing = len(filtered) - len(new_filtered)
+            log.debug("  %d missing packages identified", nmissing)
+            if nmissing == 0:
+                log.critical("%s failed to resolve packages: %s", backend_name, exc)
+                msg = f"{backend_name} failed to resolve packages"
+                raise RuntimeError(msg) from exc
+            filtered = new_filtered
+            log.debug("Retrying...")
+
+    return filtered
 
 
 # -- output formatting ------
@@ -919,6 +1049,7 @@ def pip2conda(
     skip_build_requires: bool = False,
     skip_conda_forge_check: bool = False,
     conda: str | Path = CONDA,
+    solver: Literal["conda", "rattler"] = "conda",
 ) -> set[str]:
     """Parse requirements for a project and return conda packages."""
     # parse requirements
@@ -938,6 +1069,7 @@ def pip2conda(
     return filter_requirements(
         requirements,
         conda=conda,
+        solver=solver,
     )
 
 
@@ -1068,6 +1200,16 @@ def create_parser() -> argparse.ArgumentParser:
         help="Conda/mamba executable to call",
     )
     parser.add_argument(
+        "-S",
+        "--solver",
+        default="conda",
+        choices=["conda", "rattler"],
+        help=(
+            "Backend to use for filtering requirements, either 'conda' (default) or"
+            " 'rattler' (requires py-rattler to be installed)"
+        ),
+    )
+    parser.add_argument(
         "-s",
         "--skip-conda-forge-check",
         action="store_true",
@@ -1119,6 +1261,7 @@ def main(args: list[str] | None = None) -> None:
         skip_build_requires=opts.no_build_requires,
         skip_conda_forge_check=opts.skip_conda_forge_check,
         conda=opts.conda,
+        solver=opts.solver,
     ))
     log.info("Package finding complete")
 

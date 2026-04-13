@@ -175,3 +175,30 @@ For a full list of available options, run:
 .. code-block:: shell
 
    pip2conda --help
+
+Using the rattler backend
+=========================
+
+pip2conda can use `py-rattler <https://rattler.prefix.dev/py-rattler/>`__ as an
+experimental backend for checking whether packages exist in conda-forge.
+
+.. warning::
+
+    The rattler backend is experimental.
+    It should be very fast, but hasn't been as rigorously tested as the conda backend.
+    Feedback is welcome `on GitLab <https://gitlab.com/gwpy/pip2conda/-/issues/>`__.
+
+Install the optional extra first:
+
+.. code-block:: shell
+
+    python -m pip install "pip2conda[rattler]"
+
+Then select the backend with ``-S/--solver``:
+
+.. code-block:: shell
+
+    pip2conda -S rattler
+
+All other options continue to work as usual, including extras, dependency groups,
+and Python version selection.

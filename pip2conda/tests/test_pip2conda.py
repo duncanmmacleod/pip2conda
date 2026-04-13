@@ -13,11 +13,13 @@ import pytest
 import requests
 from build import BuildException
 from packaging.requirements import InvalidRequirement
+from rattler.exceptions import GatewayError
 
 from ..pip2conda import (
     _normalize_dependency_groups,
     _normalize_group_name,
     _resolve_dependency_group,
+    filter_requirements,
     main as pip2conda_main,
     parse_dependency_groups,
     parse_requirements,
@@ -131,6 +133,61 @@ def test_parse_requirements(reqs, environment, extras, result):
         environment=environment,
         extras=extras,
     )) == result
+
+
+def test_filter_requirements_rattler_removes_missing():
+    """Test py-rattler branch removes unavailable requirements iteratively."""
+    with mock.patch("pip2conda.pip2conda._find_packages_rattler") as find:
+        find.side_effect = [
+            RuntimeError(
+                "Cannot solve the request because of: "
+                "No candidates were found for d *.\n",
+            ),
+            None,
+        ]
+        assert filter_requirements(["a", "d"], solver="rattler") == {"a"}
+
+
+def test_filter_requirements_conda_retries_http_error():
+    """Test conda backend retries transient HTTP solver errors."""
+    with mock.patch("pip2conda.pip2conda.find_packages") as find:
+        find.side_effect = [
+            mock_proc(
+                returncode=1,
+                data={
+                    "exception_name": "CondaHTTPError",
+                    "error": "HTTP 503",
+                },
+            ),
+            mock_proc(returncode=0, data={}),
+        ]
+        assert filter_requirements(["a"], solver="conda") == {"a"}
+
+
+def test_filter_requirements_rattler_retries_transient_network_error():
+    """Test rattler backend retries transient repo fetch failures."""
+    with mock.patch("pip2conda.pip2conda._find_packages_rattler") as find:
+        find.side_effect = [
+            GatewayError("HTTP 503"),
+            None,
+        ]
+        assert filter_requirements(["a"], solver="rattler") == {"a"}
+
+
+def test_filter_requirements_rattler_raises_unhandled_error():
+    """Test py-rattler branch raises for non-missing-package solver errors."""
+    with (  # noqa: PT012
+        mock.patch("pip2conda.pip2conda._find_packages_rattler") as find,
+        pytest.raises(RuntimeError, match="py-rattler failed to resolve packages"),
+    ):
+        find.side_effect = RuntimeError("unsatisfiable constraints")
+        filter_requirements(["a"], solver="rattler")
+
+
+def test_filter_requirements_invalid_solver():
+    """Test unknown solver backends are rejected."""
+    with pytest.raises(ValueError, match="unknown solver backend"):
+        filter_requirements(["a"], solver="unknown")  # type: ignore[arg-type]
 
 
 # -- end-to-end tests -------
