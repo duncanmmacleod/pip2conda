@@ -47,6 +47,8 @@ try:
 except ImportError:
     Formatter = logging.Formatter
 
+from . import __version__
+
 if TYPE_CHECKING:
     from collections.abc import (
         Collection,
@@ -958,6 +960,13 @@ def create_parser() -> argparse.ArgumentParser:
         description=__doc__,
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=_get_prog(),
+    )
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
 
     # DEPRECATED positional argument
