@@ -25,4 +25,4 @@ You can also install directly from PyPI:
 Requirements
 ============
 
-pip2conda supports Python 3.10 and later versions.
+pip2conda supports Python 3.11 and later versions.

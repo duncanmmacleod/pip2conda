@@ -23,7 +23,7 @@ Run ``pip2conda`` from the base of your project directory:
         grayskull>=1.0.0
         packaging>=25.0
         python-build>=1.0.0
-        python>=3.10
+        python>=3.11
         requests>=2.32.5
         ruamel.yaml>=0.18.15
         setuptools-scm>=3.4.3
@@ -159,7 +159,7 @@ conda environment files.
         - grayskull>=1.0.0
         - packaging>=25.0
         - python-build>=1.0.0
-        - python>=3.10
+        - python>=3.11
         - requests>=2.32.5
         - ruamel.yaml>=0.18.15
         - setuptools-scm>=3.4.3
