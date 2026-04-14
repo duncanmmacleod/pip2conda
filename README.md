@@ -39,7 +39,7 @@ $ pip2conda
 build
 grayskull>=1.0.0
 packaging
-python>=3.10
+python>=3.11
 requests
 ruamel.yaml
 setuptools-scm>=3.4.3

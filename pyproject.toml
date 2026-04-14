@@ -26,7 +26,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -37,14 +36,13 @@ classifiers = [
 ]
 
 # requirements:
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "build >= 1.0.0",
   "grayskull >=2.9.2",
   "requests >= 2.32.5",
   "ruamel.yaml >= 0.18.15",
   "packaging >= 25.0",
-  "tomli >= 2.2.1; python_version < '3.11'",
   "wheel >= 0.46.2",
 ]
 

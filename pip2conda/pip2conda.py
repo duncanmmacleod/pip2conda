@@ -23,12 +23,8 @@ from collections import defaultdict
 from importlib.metadata import PathDistribution
 from pathlib import Path
 from shutil import which
+from tomllib import load as toml_load
 from typing import TYPE_CHECKING
-
-try:
-    from tomllib import load as toml_load
-except ModuleNotFoundError:  # python < 3.11
-    from tomli import load as toml_load  # type: ignore[assignment,no-redef]
 
 import requests
 from build import (

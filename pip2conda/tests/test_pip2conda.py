@@ -354,7 +354,7 @@ description = "test project"
 authors = [ "Duncan Macleod <duncanmmacleod@gmail.com>" ]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 h5py = ">=2.10.0"
 # for tests
 pytest = {version="*", optional=true}
@@ -378,7 +378,7 @@ test = [ "pytest" ]
         "h5py>=2.10.0",
         "poetry-core>=1.0.0",
         "pytest",
-        "python>=3.10",
+        "python>=3.11",
         "python<4.0",
     }
 
